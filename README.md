@@ -1,6 +1,6 @@
 ClustModel
 ============
-Spherical Jeans modelling code for galaxy clusters.
+This code calculates the line of sight velocity and disperision for galaxy tracers in a cluster.
 
 #### INPUT:
 - Projected positions of galaxy tracers (in arcsecs)
