@@ -5,7 +5,10 @@ This code calculates the line of sight velocity and disperision for galaxy trace
 #### INPUT:
 - Projected positions of galaxy tracers (in arcsecs)
 - M200 and R200 of cluster DM halo  (in Msun and pc)
+
+#### FITTING PARAMETERS:
 - Anisotropy parameters for cluster
+- Concentration parameter 'c' of NFW profile
 
 #### OUTPUT:
 - Line of sight velocities and dispersions (km/s)
