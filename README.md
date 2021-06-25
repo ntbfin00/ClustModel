@@ -12,7 +12,8 @@ This code calculates the line of sight velocity and disperision for galaxy trace
 --------------------------------------------------------
 TNGextract
 ==========
-Extracts For use with IllustrisTNG simulation
+For use with IllustrisTNG simulation TNG300-1 at z=0.
+Extract all required ClustModel inputs (positions, masses, velocities, dispersions) from IllustrisTNG.
 
 #### OUTPUT: 
-- positions.dat - projected x and y galaxy tracer positions (in arcsecs)
+- 'positions.dat' - projected x and y galaxy tracer positions (in arcsecs)
