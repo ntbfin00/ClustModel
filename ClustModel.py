@@ -37,7 +37,7 @@ plt.hist(np.log(Rdist[1:]),bins)
 plt.title('Histogram of tracers')
 plt.xlabel('ln(R) (pc)')
 plt.ylabel('Count')
-plt.show()
+#plt.show()
 
 # histogram of tracer number density
 shell_vol = np.zeros(bins)
@@ -54,14 +54,14 @@ plt.title('Tracerumber density distribution')
 plt.xlabel('ln(R) (pc)')
 plt.ylabel('Number density $(pc^{-3})$')
 plt.yscale("log")
-plt.show()
+#plt.show()
 
 plt.plot(np.exp(logr)/1e6,density,marker = 'o')
 plt.yscale('log')
 plt.title('Tracer number density (logarithmic sampling)')
 plt.xlabel('R $(10^6 pc)$')
 plt.ylabel('Number density $(pc^{-3})$')
-plt.show()
+#plt.show()
 
 # Fit polynomial
 no_val = np.where(density == 0)[0]  # disregard zero values that will mess with the polynomial fit
@@ -85,7 +85,7 @@ plt.plot(logr,np.log(density), marker='o')
 plt.title("Tracer number density fit")
 plt.ylabel(r"$\ln{\nu}\,\, (pc^{-3})$")
 plt.xlabel("ln(R) (pc)")
-plt.show()
+#plt.show()
 
 
 #======================DARK MATTER NFW DENSITY PROFILE=======================
@@ -109,7 +109,7 @@ plt.title('NFW density profile')
 plt.loglog(r,y)
 plt.xlabel('Radius  (pc)')
 plt.ylabel(''r'$\rho\,\,(Msun/pc^3)$')
-plt.show()
+#plt.show()
 
 
 #===========================JEANS MODEL===================================
