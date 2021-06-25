@@ -9,3 +9,10 @@ This code calculates the line of sight velocity and disperision for galaxy trace
 
 #### OUTPUT:
 - Line of sight velocities and dispersions (km/s)
+--------------------------------------------------------
+TNGextract
+==========
+Extracts For use with IllustrisTNG simulation
+
+#### OUTPUT: 
+- positions.dat - projected x and y galaxy tracer positions (in arcsecs)
