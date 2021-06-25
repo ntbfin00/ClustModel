@@ -234,3 +234,135 @@ cbar=plt.colorbar(orientation="vertical")
 plt.tight_layout()
 plt.show()
 
+# Virial theorem
+vsqr = vx_obs**2+vy_obs**2+vz_obs**2
+vir = vsqr-G*(submass(Rdist))/Rdist
+#print(vir)
+
+#==============================================================
+
+vz = np.zeros(len(mod['vz']))
+sigz = np.zeros(len(mod['vz']))
+
+for i in range(0,len(mod['vz'])):
+    if (obs['vz'][i]<0) and (zrel[i]>0):
+        vz[i] = -vr_rms[rbin_indx[i]]*(zrel[i]/Rdist[i]) 
+    if (obs['vz'][i]>0) and (zrel[i]<0):
+        vz[i] = -vr_rms[rbin_indx[i]]*(zrel[i]/Rdist[i]) 
+    else:
+        vz[i] = vr_rms[rbin_indx[i]]*(zrel[i]/Rdist[i]) 
+vz = vz*u.km/u.s
+
+sigbin_indx = np.digitize(Rdist, sig_bin, right=True)
+for i in range(0,len(rbin)):
+    bin_objs = np.where(sigbin_indx == i)[0]  # determine what tracers lie in each annulus
+    v_ms = np.mean(vz[bin_objs]**2)  # mean of the square velocities
+    v_sm = np.mean(vz[bin_objs])**2  # square of the mean velocities
+    sigz[bin_objs] = np.sqrt(v_ms - v_sm)  # set sigma for each tracer in annulus
+sigz = sigz*u.km/u.s
+
+plt.figure(figsize=(15,8))
+
+# LOS velocity and dispersion maps for example
+plt.subplot(2,3,1)
+plt.title('observed $v_z \,(km\,s^{-1})$',fontsize=27)
+plt.scatter(obs["x"],obs["y"],c=obs['vz'],cmap='jet',s=9)
+plt.xlabel('x (arcsec)',fontsize=20)
+plt.ylabel('y (arcsec)',fontsize=20)
+plt.clim(-col_lim, col_lim)
+cbar=plt.colorbar(orientation="vertical")
+
+plt.subplot(2,3,4)
+plt.title('observed $\sigma_z\, (km\,s^{-1})$',fontsize=27)
+plt.scatter(obs["x"],obs["y"],c=obs['sigz'],cmap='jet',s=9)
+plt.xlabel('x (arcsec)',fontsize=20)
+plt.ylabel('y (arcsec)',fontsize=20)
+plt.clim(0, col_lim*(3/4))
+cbar=plt.colorbar(orientation="vertical")
+
+# line of sight velocity and dispersion maps for model
+plt.subplot(2,3,2)
+plt.title('model $v_z \,(km\,s^{-1})$',fontsize=27)
+plt.scatter(obs["x"],obs["y"],c=vz,cmap='jet',s=9)
+plt.xlabel('x (arcsec)',fontsize=20)
+plt.ylabel('y (arcsec)',fontsize=20)
+plt.clim(-col_lim, col_lim)
+cbar=plt.colorbar(orientation="vertical")
+
+plt.subplot(2,3,5)
+plt.title('model $\sigma_z\, (km\,s^{-1})$',fontsize=27)
+plt.scatter(obs["x"],obs["y"],c=sigz,cmap='jet',s=9)
+plt.xlabel('x (arcsec)',fontsize=20)
+plt.ylabel('y (arcsec)',fontsize=20)
+plt.clim(0, col_lim*(3/4))
+cbar=plt.colorbar(orientation="vertical")
+
+# Residual plots
+plt.subplot(2,3,3)
+plt.title('residual $v_z \,(km\,s^{-1})$',fontsize=27)
+plt.scatter(obs["x"],obs["y"],c=(vz-obs['vz']),cmap='jet',s=9)
+plt.xlabel('x (arcsec)',fontsize=20)
+plt.ylabel('y (arcsec)',fontsize=20)
+plt.clim(-col_lim, col_lim)
+cbar=plt.colorbar(orientation="vertical")
+
+plt.subplot(2,3,6)
+plt.title('residual $\sigma_z\, (km\,s^{-1})$',fontsize=27)
+plt.scatter(obs["x"],obs["y"],c=(sigz-obs['sigz']),cmap='jet',s=9)
+plt.xlabel('x (arcsec)',fontsize=20)
+plt.ylabel('y (arcsec)',fontsize=20)
+plt.clim(-col_lim/2, col_lim/2)
+cbar=plt.colorbar(orientation="vertical")
+
+plt.tight_layout()
+plt.show()
+
+obsgrp = np.zeros(2)
+modgrp = np.zeros(2)
+obsgrp[0] = np.where(obs['vz']>0)
+obsgrp[1] = np.where(obs['vz']<0)
+modgrp[0] = np.where(vz>0) 
+modgrp[1] = np.where(vz<0)
+
+sign = 0
+
+plt.figure(figsize=(10,8))
+
+# LOS velocity and dispersion maps for example
+plt.subplot(2,2,1)
+plt.title('observed $v_z \,(km\,s^{-1})$',fontsize=27)
+plt.scatter(obs["x"][obsgrp[sign]],obs["y"][obsgrp[sign]],c=obs['vz'][obsgrp[sign]],cmap='jet',s=9)
+plt.xlabel('x (arcsec)',fontsize=20)
+plt.ylabel('y (arcsec)',fontsize=20)
+plt.clim(-col_lim, col_lim)
+cbar=plt.colorbar(orientation="vertical")
+
+plt.subplot(2,2,3)
+plt.title('observed $\sigma_z\, (km\,s^{-1})$',fontsize=27)
+plt.scatter(obs["x"][obsgrp[sign]],obs["y"][obsgrp[sign]],c=obs['sigz'][obsgrp[sign]],cmap='jet',s=9)
+plt.xlabel('x (arcsec)',fontsize=20)
+plt.ylabel('y (arcsec)',fontsize=20)
+plt.clim(0, col_lim*(3/4))
+cbar=plt.colorbar(orientation="vertical")
+
+# line of sight velocity and dispersion maps for model
+plt.subplot(2,2,2)
+plt.title('model $v_z \,(km\,s^{-1})$',fontsize=27)
+plt.scatter(obs["x"][modgrp[sign]],obs["y"][modgrp[sign]],c=mod['vz'][modgrp[sign]],cmap='jet',s=9)
+plt.xlabel('x (arcsec)',fontsize=20)
+plt.ylabel('y (arcsec)',fontsize=20)
+plt.clim(-col_lim, col_lim)
+cbar=plt.colorbar(orientation="vertical")
+
+plt.subplot(2,2,4)
+plt.title('model $\sigma_z\, (km\,s^{-1})$',fontsize=27)
+plt.scatter(obs["x"][modgrp[sign]],obs["y"][modgrp[sign]],c=mod['sigz'][modgrp[sign]],cmap='jet',s=9)
+plt.xlabel('x (arcsec)',fontsize=20)
+plt.ylabel('y (arcsec)',fontsize=20)
+plt.clim(0, col_lim*(3/4))
+cbar=plt.colorbar(orientation="vertical")
+
+
+
+plt.tight_layout()
+plt.show()
