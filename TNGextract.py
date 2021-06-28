@@ -207,12 +207,12 @@ def v_sph(r,x,y,z,vx,vy,vz):  # convert velocities from cartesian to spherical
     vy=vy[1:]
     vz=vz[1:]
     
-    vr = (x*vx+y*vy+z*vz)/r
+    vrad = (x*vx+y*vy+z*vz)/r
     vphi = (x*vy-y*vx)/np.sqrt(r**2-z**2)
     vtheta = (z/(r*np.sqrt(r**2-z**2)))*(x*vx + y*vy + ((z/r)**2-1)*vz)
-    return vr,vphi,vtheta
+    return vrad,vphi,vtheta
 
-vr,vphi,vtheta = v_sph(Rdist,xrel,yrel,zrel,vx_obs,vy_obs,vz_obs)
+vrad,vphi,vtheta = v_sph(Rdist,xrel,yrel,zrel,vx_obs,vy_obs,vz_obs)
 
 nbeta=10  # set number of beta parameters to use
 
@@ -220,7 +220,7 @@ beta_obs=np.zeros(nbeta)
 
 for i in range(0,nbeta):
     indx = np.where(Rdist[1:]<=Rmax/nbeta*(i+1))
-    beta_obs [i] = 1 - (np.mean(vphi[indx]**2)+np.mean(vtheta**2))/(2*np.mean(vr**2))
+    beta_obs [i] = 1 - (np.mean(vphi[indx]**2)+np.mean(vtheta**2))/(2*np.mean(vrad**2))
 
 print('\nM200 (Msun): ',M200,' R200 (Msun): ',R200)
 print('Anisotropy parameters (from R=0 to Rmax): ',beta_obs)
