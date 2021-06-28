@@ -10,7 +10,6 @@ filepath='/Users/nathanfindlay/Gals_SummerProject/data_files/'#'/YOUR_FILEPATH' 
 
 # Define astronomical constants
 G = 4.3009125e-3 # (km/s)^2 pc/Msun
-c = 2.998e5  #km/s
 redshift=0
 scale_factor = 1.0 / (1+redshift)
 h = 0.6774 # choose your H0 
@@ -98,11 +97,11 @@ def nfw(r,M200,R200,c):  # Msun/pc^3
 
     return nfw
 
-c=10  # set NFW concentration parameter
+c_par=10  # set NFW concentration parameter
 halo_ext = 1.2*Rmax  # set extent of NFW profile in terms of distance of furthest tracer
 
 r = np.geomspace(1, halo_ext, 300)  # logarithmically spaced radii in pc
-y = nfw(r,M200,R200,c)  # The profile must be logarithmically sampled!
+y = nfw(r,M200,R200,c_par)  # The profile must be logarithmically sampled!
 
 # Plot NFW profile
 plt.title('NFW density profile')
