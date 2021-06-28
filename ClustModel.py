@@ -146,7 +146,6 @@ rbin = np.linspace(1, Rmax, nbins)    # Rmin=1 to avoid division by 0
 # Solve ODE for radial velocity
 vr_rms = np.sqrt(abs(odeint(jeansODE, vr0, rbin,args=(beta,))))   # in km/s
 
-
 # Plot the rotation curve
 plt.plot(rbin,vr_rms)
 plt.title('Rotation curve')
@@ -165,7 +164,7 @@ rbin_indx = np.digitize(Rdist, rbin, right=True)
 for i in range(1,len(Rdist)):
     vz_mod[0] = 0  # add primary subhalo vz
     vr_mod[i] = vr_rms[rbin_indx[i]]  # sets abs(vr) for each object based on Jeans solution
-    if vr[i-1]<0:  # sets vr direction from observed vr
+    if vrad[i-1]<0:  # sets vr direction from observed vr
         sign = -1
     else:
         sign = 1
@@ -177,7 +176,7 @@ for i in range(0,len(rbin)):
     bin_objs = np.where(sigbin_indx == i)[0]  # determine what tracers lie in each annulus
     v_ms = np.mean(vz_mod[bin_objs]**2)  # mean of the square velocities
     v_sm = np.mean(vz_mod[bin_objs])**2  # square of the mean velocities
-    sigma_mod[bin_objs] = np.sqrt(v_ms - v_sm)  # set sigma for each tracer in annulus
+    sigma_mod[bin_objs] = np.sqrt(v_ms)# - v_sm)  # set sigma for each tracer in annulus
     
 # Write model velocities and dispersions to file
 units = 'vz (km/s)   sigma_z (km/s)'
