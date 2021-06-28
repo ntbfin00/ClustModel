@@ -37,7 +37,7 @@ plt.hist(np.log(Rdist[1:]),bins)
 plt.title('Histogram of tracers')
 plt.xlabel('ln(R) (pc)')
 plt.ylabel('Count')
-#plt.show()
+plt.show()
 
 # histogram of tracer number density
 shell_vol = np.zeros(bins)
@@ -54,14 +54,14 @@ plt.title('Tracerumber density distribution')
 plt.xlabel('ln(R) (pc)')
 plt.ylabel('Number density $(pc^{-3})$')
 plt.yscale("log")
-#plt.show()
+plt.show()
 
 plt.plot(np.exp(logr)/1e6,density,marker = 'o')
 plt.yscale('log')
 plt.title('Tracer number density (logarithmic sampling)')
 plt.xlabel('R $(10^6 pc)$')
 plt.ylabel('Number density $(pc^{-3})$')
-#plt.show()
+plt.show()
 
 # Fit polynomial
 no_val = np.where(density == 0)[0]  # disregard zero values that will mess with the polynomial fit
@@ -85,7 +85,7 @@ plt.plot(logr,np.log(density), marker='o')
 plt.title("Tracer number density fit")
 plt.ylabel(r"$\ln{\nu}\,\, (pc^{-3})$")
 plt.xlabel("ln(R) (pc)")
-#plt.show()
+plt.show()
 
 
 #======================DARK MATTER NFW DENSITY PROFILE=======================
@@ -109,7 +109,7 @@ plt.title('NFW density profile')
 plt.loglog(r,y)
 plt.xlabel('Radius  (pc)')
 plt.ylabel(''r'$\rho\,\,(Msun/pc^3)$')
-#plt.show()
+plt.show()
 
 
 #===========================JEANS MODEL===================================
@@ -134,27 +134,42 @@ def jeansODE(vr,r,beta):
     dvdr = -vr*(2*beta[bindx]/r + derivative(lognu, r, dx=1e-30))-(G/r**2)*(submass(r)+m_nfw)
     return dvdr
 
-vr0 = 0  # initial condition at cluster centre r=0 (arbitrary)
+#plt.scatter(Rdist[1:],abs(vr))
+#plt.xscale('log')
+#plt.show()
+
+
+vr0 = 0 # initial condition at cluster centre r=0 (arbitrary)
 nbins = 1000  # set number of velocity bins for the model
 rbin = np.linspace(1, Rmax, nbins)    # Rmin=1 to avoid division by 0
 
 # Solve ODE for radial velocity
 vr_rms = np.sqrt(abs(odeint(jeansODE, vr0, rbin,args=(beta,))))   # in km/s
 
+
 # Plot the rotation curve
 plt.plot(rbin,vr_rms)
 plt.title('Rotation curve')
-plt.ylabel('Radial v_rms (km/s)')
+plt.ylabel('Absolute radial v_rms (km/s)')
 plt.xlabel('Clustocentric radius (pc)')
 plt.xscale('log')
+plt.show()
 
+vr_mod=np.zeros(len(Rdist))
 vz_mod=np.zeros(len(Rdist))
 sigma_mod=np.zeros(len(Rdist))
+gamma=np.zeros(len(Rdist))
 
-# Calculate vr in radius bins and determine vz projection
 rbin_indx = np.digitize(Rdist, rbin, right=True)
-for i in range(0,len(Rdist)):
-    vz_mod[i] = vr_rms[rbin_indx[i]]*(zrel[i]/Rdist[i])  # vz=vr.cos(theta)=vr.(z/r)
+
+for i in range(1,len(Rdist)):
+    vz_mod[0] = 0  # add primary subhalo vz
+    vr_mod[i] = vr_rms[rbin_indx[i]]  # sets abs(vr) for each object based on Jeans solution
+    if vr[i-1]<0:  # sets vr direction from observed vr
+        sign = -1
+    else:
+        sign = 1
+    vz_mod[i] = sign*vr_mod[i]*(zrel[i]/Rdist[i])  # vz=vr.cos(theta)=vr.(z/r)
 
 # Calculate dispersions by binning velocities in radius
 sigbin_indx = np.digitize(Rdist, sig_bin, right=True)
@@ -235,134 +250,15 @@ plt.tight_layout()
 plt.show()
 
 # Virial theorem
-vsqr = vx_obs**2+vy_obs**2+vz_obs**2
-vir = vsqr-G*(submass(Rdist))/Rdist
+#vsqr = vx_obs**2+vy_obs**2+vz_obs**2
+#vir = vsqr-G*(submass(Rdist))/Rdist
 #print(vir)
 
-#==============================================================
 
-vz = np.zeros(len(mod['vz']))
-sigz = np.zeros(len(mod['vz']))
+prcnt_vel = abs((abs(mod['vz'])-abs(obs['vz']))/obs['vz'])*100
+prcnt_vel = [x for x in prcnt_vel if np.isnan(x) == False]  # remove nan values
+prcnt_sig = abs((mod['sigz']-obs['sigz'])/obs['sigz'])*100
+prcnt_sig = [x for x in prcnt_sig if np.isnan(x) == False]  # remove nan values
 
-for i in range(0,len(mod['vz'])):
-    if (obs['vz'][i]<0) and (zrel[i]>0):
-        vz[i] = -vr_rms[rbin_indx[i]]*(zrel[i]/Rdist[i]) 
-    if (obs['vz'][i]>0) and (zrel[i]<0):
-        vz[i] = -vr_rms[rbin_indx[i]]*(zrel[i]/Rdist[i]) 
-    else:
-        vz[i] = vr_rms[rbin_indx[i]]*(zrel[i]/Rdist[i]) 
-vz = vz*u.km/u.s
-
-sigbin_indx = np.digitize(Rdist, sig_bin, right=True)
-for i in range(0,len(rbin)):
-    bin_objs = np.where(sigbin_indx == i)[0]  # determine what tracers lie in each annulus
-    v_ms = np.mean(vz[bin_objs]**2)  # mean of the square velocities
-    v_sm = np.mean(vz[bin_objs])**2  # square of the mean velocities
-    sigz[bin_objs] = np.sqrt(v_ms - v_sm)  # set sigma for each tracer in annulus
-sigz = sigz*u.km/u.s
-
-plt.figure(figsize=(15,8))
-
-# LOS velocity and dispersion maps for example
-plt.subplot(2,3,1)
-plt.title('observed $v_z \,(km\,s^{-1})$',fontsize=27)
-plt.scatter(obs["x"],obs["y"],c=obs['vz'],cmap='jet',s=9)
-plt.xlabel('x (arcsec)',fontsize=20)
-plt.ylabel('y (arcsec)',fontsize=20)
-plt.clim(-col_lim, col_lim)
-cbar=plt.colorbar(orientation="vertical")
-
-plt.subplot(2,3,4)
-plt.title('observed $\sigma_z\, (km\,s^{-1})$',fontsize=27)
-plt.scatter(obs["x"],obs["y"],c=obs['sigz'],cmap='jet',s=9)
-plt.xlabel('x (arcsec)',fontsize=20)
-plt.ylabel('y (arcsec)',fontsize=20)
-plt.clim(0, col_lim*(3/4))
-cbar=plt.colorbar(orientation="vertical")
-
-# line of sight velocity and dispersion maps for model
-plt.subplot(2,3,2)
-plt.title('model $v_z \,(km\,s^{-1})$',fontsize=27)
-plt.scatter(obs["x"],obs["y"],c=vz,cmap='jet',s=9)
-plt.xlabel('x (arcsec)',fontsize=20)
-plt.ylabel('y (arcsec)',fontsize=20)
-plt.clim(-col_lim, col_lim)
-cbar=plt.colorbar(orientation="vertical")
-
-plt.subplot(2,3,5)
-plt.title('model $\sigma_z\, (km\,s^{-1})$',fontsize=27)
-plt.scatter(obs["x"],obs["y"],c=sigz,cmap='jet',s=9)
-plt.xlabel('x (arcsec)',fontsize=20)
-plt.ylabel('y (arcsec)',fontsize=20)
-plt.clim(0, col_lim*(3/4))
-cbar=plt.colorbar(orientation="vertical")
-
-# Residual plots
-plt.subplot(2,3,3)
-plt.title('residual $v_z \,(km\,s^{-1})$',fontsize=27)
-plt.scatter(obs["x"],obs["y"],c=(vz-obs['vz']),cmap='jet',s=9)
-plt.xlabel('x (arcsec)',fontsize=20)
-plt.ylabel('y (arcsec)',fontsize=20)
-plt.clim(-col_lim, col_lim)
-cbar=plt.colorbar(orientation="vertical")
-
-plt.subplot(2,3,6)
-plt.title('residual $\sigma_z\, (km\,s^{-1})$',fontsize=27)
-plt.scatter(obs["x"],obs["y"],c=(sigz-obs['sigz']),cmap='jet',s=9)
-plt.xlabel('x (arcsec)',fontsize=20)
-plt.ylabel('y (arcsec)',fontsize=20)
-plt.clim(-col_lim/2, col_lim/2)
-cbar=plt.colorbar(orientation="vertical")
-
-plt.tight_layout()
-plt.show()
-
-obsgrp = np.zeros(2)
-modgrp = np.zeros(2)
-obsgrp[0] = np.where(obs['vz']>0)
-obsgrp[1] = np.where(obs['vz']<0)
-modgrp[0] = np.where(vz>0) 
-modgrp[1] = np.where(vz<0)
-
-sign = 0
-
-plt.figure(figsize=(10,8))
-
-# LOS velocity and dispersion maps for example
-plt.subplot(2,2,1)
-plt.title('observed $v_z \,(km\,s^{-1})$',fontsize=27)
-plt.scatter(obs["x"][obsgrp[sign]],obs["y"][obsgrp[sign]],c=obs['vz'][obsgrp[sign]],cmap='jet',s=9)
-plt.xlabel('x (arcsec)',fontsize=20)
-plt.ylabel('y (arcsec)',fontsize=20)
-plt.clim(-col_lim, col_lim)
-cbar=plt.colorbar(orientation="vertical")
-
-plt.subplot(2,2,3)
-plt.title('observed $\sigma_z\, (km\,s^{-1})$',fontsize=27)
-plt.scatter(obs["x"][obsgrp[sign]],obs["y"][obsgrp[sign]],c=obs['sigz'][obsgrp[sign]],cmap='jet',s=9)
-plt.xlabel('x (arcsec)',fontsize=20)
-plt.ylabel('y (arcsec)',fontsize=20)
-plt.clim(0, col_lim*(3/4))
-cbar=plt.colorbar(orientation="vertical")
-
-# line of sight velocity and dispersion maps for model
-plt.subplot(2,2,2)
-plt.title('model $v_z \,(km\,s^{-1})$',fontsize=27)
-plt.scatter(obs["x"][modgrp[sign]],obs["y"][modgrp[sign]],c=mod['vz'][modgrp[sign]],cmap='jet',s=9)
-plt.xlabel('x (arcsec)',fontsize=20)
-plt.ylabel('y (arcsec)',fontsize=20)
-plt.clim(-col_lim, col_lim)
-cbar=plt.colorbar(orientation="vertical")
-
-plt.subplot(2,2,4)
-plt.title('model $\sigma_z\, (km\,s^{-1})$',fontsize=27)
-plt.scatter(obs["x"][modgrp[sign]],obs["y"][modgrp[sign]],c=mod['sigz'][modgrp[sign]],cmap='jet',s=9)
-plt.xlabel('x (arcsec)',fontsize=20)
-plt.ylabel('y (arcsec)',fontsize=20)
-plt.clim(0, col_lim*(3/4))
-cbar=plt.colorbar(orientation="vertical")
-
-
-
-plt.tight_layout()
-plt.show()
+print('Velocity residuals are, on average, ', np.mean(prcnt_vel),'% of the observations')
+print('Dispersion residuals are, on average, ', np.mean(prcnt_sig),'% of the observations')
