@@ -64,7 +64,7 @@ for i in range(0,bins):
     logr[i] = (tracer_hist[1][i+1]-tracer_hist[1][i])/2+tracer_hist[1][i]
 
 plt.bar(logr,density)
-plt.title('Tracerumber density distribution')
+plt.title('Tracer number density distribution')
 plt.xlabel('ln(R) (pc)')
 plt.ylabel('Number density $(pc^{-3})$')
 plt.yscale("log")
@@ -154,14 +154,6 @@ rbin = np.linspace(1, Rmax, nbins)    # Rmin=1 to avoid division by 0
 # Solve ODE for radial velocity
 vr_rms = np.sqrt(abs(odeint(jeansODE, vr0, rbin,args=(beta,))))   # in km/s
 
-# Plot the rotation curve
-plt.plot(rbin,vr_rms)
-plt.title('Rotation curve')
-plt.ylabel('Absolute radial v_rms (km/s)')
-plt.xlabel('Clustocentric radius (pc)')
-plt.xscale('log')
-plt.show()
-
 vr_mod=np.zeros(len(Rdist))
 vz_mod=np.zeros(len(Rdist))
 sigma_mod=np.zeros(len(Rdist))
@@ -177,6 +169,17 @@ for i in range(1,len(Rdist)):
     else:
         sign = 1
     vz_mod[i] = sign*vr_mod[i]*(zrel[i]/Rdist[i])  # vz=vr.cos(theta)=vr.(z/r)
+    
+# Plot the rotation curve
+plt.plot(rbin,vr_rms,label='solution')
+plt.scatter(Rdist[1:],vr_mod[1:],s=9,color='r',label='tracers')
+plt.title('Rotation curve')
+plt.ylabel('Radial $v_{rms}$ (km/s)')
+plt.xlabel('Clustocentric radius (pc)')
+plt.xscale('log')
+plt.xlim(np.min(Rdist[1:]),Rmax)
+plt.legend()
+plt.show()
 
 # Calculate dispersions by binning velocities in radius
 nsig_bin = 20  # number of velocity bins for dispersion calculations (same should be used in TNGextract)
