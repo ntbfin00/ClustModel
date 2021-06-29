@@ -38,7 +38,7 @@ filepath='/Users/nathanfindlay/Gals_SummerProject/data_files/'#'/YOUR_FILEPATH' 
 zobs=0.1
 Dist = (c*zobs/H0)*1e6  # set observer distance in pc (set here for cluster at z=0.1)
 
-grnr = 1  # set FoF group number to work with (grnr=0 is not a relaxed cluster)
+grnr = 2  # set FoF group number to work with (grnr=0 is not a relaxed cluster)
 #=======================================================================
 
 
@@ -98,19 +98,14 @@ xrel = xpos-xc
 yrel = ypos-yc
 zrel = zpos-zc
 
-
 # Calculate projected tracer positions in arcsecs
 xproj = np.arctan((xrel)/(Dist+(zrel)))
 yproj = np.arctan((yrel)/(Dist+(zrel)))
 print('Projected positions determined')
 
-
-#===============================================================
 # Determine radial distance from centre to tracer.
 Rdist = np.sqrt((xrel)**2+(yrel)**2+(zrel)**2)  # in pc
 Rmax = np.max(Rdist)  # distance of furthest tracer
-#===============================================================
-
 
 
 # Extract FoF halo properties
@@ -138,7 +133,7 @@ for i in range(0,num):
 print('Velocities calculated')
 
 # Bin velocities and calculate dispersions for each annulus.
-nsig_bin = 20  # number of velocity bins for dispersion calculations (same should be used in model later)
+nsig_bin = 20  # number of velocity bins for dispersion calculations (same should be used in model)
 sig_bin = np.linspace(0, Rmax, nsig_bin)  # make evenly distributed bins
 bin_indx = np.digitize(Rdist, sig_bin, right=True)
 sigma_obs=np.zeros(len(Rdist))
@@ -158,69 +153,70 @@ for i in range(0,num):
     msub[i] = my_subs['mass_stars']*to_Msun
 print('Subhalo stellar masses extracted')
 
+# Convert velocities from cartesian to spherical
+def v_sph(r,x,y,z,vx,vy,vz):  
+    vrad = (x*vx+y*vy+z*vz)/r
+    vphi = (x*vy-y*vx)/np.sqrt(r**2-z**2)
+    vtheta = (z/(r*np.sqrt(r**2-z**2)))*(x*vx + y*vy + ((z/r)**2-1)*vz)
+
+    vrad[r==0]=0  # set velocities to zero for primary subhalo
+    vphi[r==0]=0
+    vtheta[r==0]=0
+    return vrad,vphi,vtheta
+
+vrad,vphi,vtheta = v_sph(Rdist,xrel,yrel,zrel,vx_obs,vy_obs,vz_obs)
+
 # Write positions, LoS velocities, LoS dispersions and masses to file
-units = 'x\' (arcsecs)   y\' (arcsecs)   vz (km/s)   sigma_z (km/s)   Mstellar (Msun)'
-data = np.column_stack((xproj,yproj,vz_obs,sigma_obs,msub))  # in pc, no z as observing along z axis
+units = 'x\' (arcsecs)   y\' (arcsecs)   vz (km/s)   sigma_z (km/s)   Mstellar (Msun)   Rdist (pc)   z_rel (pc)   vr (km/s)'
+data = np.column_stack((xproj,yproj,vz_obs,sigma_obs,msub,Rdist,zrel,vrad))
 
 np.savetxt(filepath + 'obs.dat', data, header=units)
 print('Observations saved to file')
 
 # Read in observations from file and add appropriate units
-obs = table.QTable.read(filepath + "obs.dat", format="ascii", names=["x","y","vz","sigz","M"])  
+obs = table.QTable.read(filepath + "obs.dat", format="ascii", names=["x","y","vz","sigz","M","R","zrel","vr"])  
 obs["x"].unit = u.arcsec
 obs["y"].unit = u.arcsec
 obs["vz"].unit = u.km/u.s
 obs["sigz"].unit = u.km/u.s
-obs['M'].unit = u.solMass
   
 # Plot velocity and dispersion maps
 col_lim = 2500  # limit of colorbar
 
-plt.figure(figsize=(5,8))
+f1, ax = plt.subplots(2,1,sharex='all',sharey='all',figsize=(6,8))
+f1.tight_layout()
+f1.show()
 
-plt.subplot(2,1,1)
-plt.title('observed $v_z \,(km\,s^{-1})$',fontsize=27)
-plt.scatter(obs["x"],obs["y"],c=obs['vz'],cmap='jet',s=9)
-plt.xlabel('x (arcsec)',fontsize=20)
-plt.ylabel('y (arcsec)',fontsize=20)
-plt.clim(-col_lim, col_lim)
-cbar=plt.colorbar(orientation="vertical")
+# Observed line of sight velocity and dispersion maps
+obs1 = ax[0].scatter(obs["x"]*1e3,obs["y"]*1e3,c=obs['vz'],cmap='jet',s=9)
+ax[0].set_title('observed $v_z \,(km\,s^{-1})$',fontsize=25)
+ax[0].set_ylabel('y ($10^{-3}$ arcsec)',fontsize=20)
+obs1.set_clim(-col_lim, col_lim)
+plt.colorbar(obs1,ax=ax[0])
 
-plt.subplot(2,1,2)
-plt.title('observed $\sigma_z\, (km\,s^{-1})$',fontsize=27)
-plt.scatter(obs["x"],obs["y"],c=obs['sigz'],cmap='jet',s=9)
-plt.xlabel('x\' (arcsec)',fontsize=20)
-plt.ylabel('y\' (arcsec)',fontsize=20)
-plt.clim(0, col_lim*(3/4))
-cbar=plt.colorbar(orientation="vertical")
+obs2 = ax[1].scatter(obs["x"]*1e3,obs["y"]*1e3,c=obs['sigz'],cmap='jet',s=9)
+ax[1].set_xlabel('x ($10^{-3}$ arcsec)',fontsize=20)
+ax[1].set_ylabel('y ($10^{-3}$ arcsec)',fontsize=20)
+obs2.set_clim(0, col_lim*(3/4))
+plt.colorbar(obs2,ax=ax[1])
 
-plt.tight_layout()
-plt.show()
 
 # Determine real anisotropy parameters for observations
-def v_sph(r,x,y,z,vx,vy,vz):  # convert velocities from cartesian to spherical
-    r=r[1:]  # remove primary subhalo from calculation 
-    x=x[1:]
-    y=y[1:]
-    z=z[1:]
-    vx=vx[1:]
-    vy=vy[1:]
-    vz=vz[1:]
-    
-    vrad = (x*vx+y*vy+z*vz)/r
-    vphi = (x*vy-y*vx)/np.sqrt(r**2-z**2)
-    vtheta = (z/(r*np.sqrt(r**2-z**2)))*(x*vx + y*vy + ((z/r)**2-1)*vz)
-    return vrad,vphi,vtheta
-
-vrad,vphi,vtheta = v_sph(Rdist,xrel,yrel,zrel,vx_obs,vy_obs,vz_obs)
-
-nbeta=10  # set number of beta parameters to use
-
+nbeta=2  # set number of beta parameters to use
 beta_obs=np.zeros(nbeta)
-
 for i in range(0,nbeta):
     indx = np.where(Rdist[1:]<=Rmax/nbeta*(i+1))
-    beta_obs [i] = 1 - (np.mean(vphi[indx]**2)+np.mean(vtheta**2))/(2*np.mean(vrad**2))
+    beta_obs [i] = 1 - (np.mean(vphi[indx][1:]**2)+np.mean(vtheta[1:]**2))/(2*np.mean(vrad[1:]**2))
+print('\nAnisotropy parameters calculated')
 
-print('\nM200 (Msun): ',M200,' R200 (Msun): ',R200)
-print('Anisotropy parameters (from R=0 to Rmax): ',beta_obs)
+# Write cluster parameters to file
+units = 'M200 (Msun)   R200 (pc)   Beta'
+
+M200arr = np.zeros(len(beta_obs))  # M200 and R200 are in first row in table
+M200arr[0] = M200   
+R200arr = np.zeros(len(beta_obs))
+R200arr[0] = R200  
+
+data = np.column_stack((M200arr,R200arr,beta_obs)) 
+np.savetxt(filepath + 'clust_params.dat', data, header=units)
+print('Cluster parameters saved to file')
