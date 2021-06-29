@@ -17,12 +17,27 @@ H0 = h*100 # km/Mpc/s
 cosmo = FlatLambdaCDM(H0=H0, Om0=0.2726)
 
 # Read in observations from file and add appropriate units
-obs = table.QTable.read(filepath + "obs.dat", format="ascii", names=["x","y","vz","sigz","M"])  
+obs = table.QTable.read(filepath + "obs.dat", format="ascii", names=["x","y","vz","sigz","M","R","zrel","vr"]) 
 obs["x"].unit = u.arcsec
 obs["y"].unit = u.arcsec
 obs["vz"].unit = u.km/u.s
 obs["sigz"].unit = u.km/u.s
-obs['M'].unit = u.solMass
+
+Rdist = obs['R']
+Rmax = np.max(Rdist)
+zrel = obs['zrel']
+
+# Read in cluster parameters from file and add appropriate units
+par = table.QTable.read(filepath + "clust_params.dat", format="ascii", names=["M200","R200","beta"])  
+
+
+#======================SET PARAMETERS TO FIT===========================
+
+# Use par table to use pre-determined parameters
+c_par=10  # set NFW concentration parameter
+M200=par['M200'][0]  # set cluster halo M200 value (Msun)
+R200=par['R200'][0]  # set cluster halo R200 value (pc)
+beta=par['beta']  # set cluster anisotropy parameters as array
 
 
 #======================TRACER DENSITY FIT==============================
@@ -97,7 +112,6 @@ def nfw(r,M200,R200,c):  # Msun/pc^3
 
     return nfw
 
-c_par=10  # set NFW concentration parameter
 halo_ext = 1.2*Rmax  # set extent of NFW profile in terms of distance of furthest tracer
 
 r = np.geomspace(1, halo_ext, 300)  # logarithmically spaced radii in pc
@@ -112,14 +126,13 @@ plt.show()
 
 
 #===========================JEANS MODEL===================================
-beta=beta_obs  # enter anisotropy parameters as array
 
 def lognu(r):  # natural logarithm of tracer density in pc^-3
     return poly(np.log(r),a,deg)
 
 def submass(r):  # determine stellar mass enclosed at radius r
     objs = np.where(Rdist<r)
-    return np.sum(obs['M'][objs]/u.solMass)
+    return np.sum(obs['M'][objs])
 
 # Spherical Jeans equation (1st order differential equation)
 def jeansODE(vr,r,beta):
@@ -127,15 +140,11 @@ def jeansODE(vr,r,beta):
     if bindx>=len(beta):  # condition to ensure approximate solution doesn't breakdown
         bindx=len(beta)-1
     
-    rho = lambda r: r**2*nfw(r,M200,R200,c)  # integrate to obtain mass profile
+    rho = lambda r: r**2*nfw(r,M200,R200,c_par)  # integrate to obtain mass profile
     m_nfw = (4*np.pi*integrate.quad(rho, 0, r)[0])
   
     dvdr = -vr*(2*beta[bindx]/r + derivative(lognu, r, dx=1e-30))-(G/r**2)*(submass(r)+m_nfw)
     return dvdr
-
-#plt.scatter(Rdist[1:],abs(vr))
-#plt.xscale('log')
-#plt.show()
 
 
 vr0 = 0 # initial condition at cluster centre r=0 (arbitrary)
@@ -163,19 +172,21 @@ rbin_indx = np.digitize(Rdist, rbin, right=True)
 for i in range(1,len(Rdist)):
     vz_mod[0] = 0  # add primary subhalo vz
     vr_mod[i] = vr_rms[rbin_indx[i]]  # sets abs(vr) for each object based on Jeans solution
-    if vrad[i-1]<0:  # sets vr direction from observed vr
+    if obs['vr'][i]<0:  # sets vr direction from observed vr
         sign = -1
     else:
         sign = 1
     vz_mod[i] = sign*vr_mod[i]*(zrel[i]/Rdist[i])  # vz=vr.cos(theta)=vr.(z/r)
 
 # Calculate dispersions by binning velocities in radius
+nsig_bin = 20  # number of velocity bins for dispersion calculations (same should be used in TNGextract)
+sig_bin = np.linspace(0, Rmax, nsig_bin)  # make evenly distributed bins
 sigbin_indx = np.digitize(Rdist, sig_bin, right=True)
 for i in range(0,len(rbin)):
     bin_objs = np.where(sigbin_indx == i)[0]  # determine what tracers lie in each annulus
     v_ms = np.mean(vz_mod[bin_objs]**2)  # mean of the square velocities
     v_sm = np.mean(vz_mod[bin_objs])**2  # square of the mean velocities
-    sigma_mod[bin_objs] = np.sqrt(v_ms)# - v_sm)  # set sigma for each tracer in annulus
+    sigma_mod[bin_objs] = np.sqrt(v_ms - v_sm)  # set sigma for each tracer in annulus
     
 # Write model velocities and dispersions to file
 units = 'vz (km/s)   sigma_z (km/s)'
@@ -189,74 +200,49 @@ mod["vz"].unit = u.km/u.s
 mod["sigz"].unit = u.km/u.s
 
 # Plot observations vs. model
-col_lim = 2500  # limit of colorbar
+col_lim = 2000  # limit of colorbar
 
-plt.figure(figsize=(15,8))
+f1, ax = plt.subplots(2,3,sharex='all', sharey='all',figsize=(15,8))
+f1.tight_layout()
+f1.show()
 
-# LOS velocity and dispersion maps for example
-plt.subplot(2,3,1)
-plt.title('observed $v_z \,(km\,s^{-1})$',fontsize=27)
-plt.scatter(obs["x"],obs["y"],c=obs['vz'],cmap='jet',s=9)
-plt.xlabel('x (arcsec)',fontsize=20)
-plt.ylabel('y (arcsec)',fontsize=20)
-plt.clim(-col_lim, col_lim)
-cbar=plt.colorbar(orientation="vertical")
+# Observed line of sight velocity and dispersion maps
+obs1 = ax[0,0].scatter(obs["x"]*1e3,obs["y"]*1e3,c=obs['vz'],cmap='jet',s=9)
+ax[0,0].set_title('observed $(km\,s^{-1})$',fontsize=25)
+ax[0,0].set_ylabel('y ($10^{-3}$ arcsec)',fontsize=20)
+ax[0,0].text(0.06, 0.88, '$v_z$', style='oblique', transform=ax[0,0].transAxes,fontsize=27)
+obs1.set_clim(-col_lim, col_lim)
+plt.colorbar(obs1,ax=ax[0,0])
 
-plt.subplot(2,3,4)
-plt.title('observed $\sigma_z\, (km\,s^{-1})$',fontsize=27)
-plt.scatter(obs["x"],obs["y"],c=obs['sigz'],cmap='jet',s=9)
-plt.xlabel('x (arcsec)',fontsize=20)
-plt.ylabel('y (arcsec)',fontsize=20)
-plt.clim(0, col_lim*(3/4))
-cbar=plt.colorbar(orientation="vertical")
+obs2 = ax[1,0].scatter(obs["x"]*1e3,obs["y"]*1e3,c=obs['sigz'],cmap='jet',s=9)
+ax[1,0].set_xlabel('x ($10^{-3}$ arcsec)',fontsize=20)
+ax[1,0].set_ylabel('y ($10^{-3}$ arcsec)',fontsize=20)
+ax[1,0].text(0.06, 0.88, '$\sigma_z$', style='oblique', transform=ax[1,0].transAxes,fontsize=27)
+obs2.set_clim(0, col_lim*(3/4))
+plt.colorbar(obs2,ax=ax[1,0])
 
-# line of sight velocity and dispersion maps for model
-plt.subplot(2,3,2)
-plt.title('model $v_z \,(km\,s^{-1})$',fontsize=27)
-plt.scatter(obs["x"],obs["y"],c=mod['vz'],cmap='jet',s=9)
-plt.xlabel('x (arcsec)',fontsize=20)
-plt.ylabel('y (arcsec)',fontsize=20)
-plt.clim(-col_lim, col_lim)
-cbar=plt.colorbar(orientation="vertical")
+# Model line of sight velocity and dispersion maps
+mod1 = ax[0,1].scatter(obs["x"]*1e3,obs["y"]*1e3,c=mod['vz'],cmap='jet',s=9)
+ax[0,1].set_title('model $(km\,s^{-1})$',fontsize=25)
+ax[0,1].text(0.06, 0.88, '$v_z$', style='oblique', transform=ax[0,1].transAxes,fontsize=27)
+mod1.set_clim(-col_lim, col_lim)
+plt.colorbar(mod1,ax=ax[0,1])
 
-plt.subplot(2,3,5)
-plt.title('model $\sigma_z\, (km\,s^{-1})$',fontsize=27)
-plt.scatter(obs["x"],obs["y"],c=mod['sigz'],cmap='jet',s=9)
-plt.xlabel('x (arcsec)',fontsize=20)
-plt.ylabel('y (arcsec)',fontsize=20)
-plt.clim(0, col_lim*(3/4))
-cbar=plt.colorbar(orientation="vertical")
+mod2 = ax[1,1].scatter(obs["x"]*1e3,obs["y"]*1e3,c=mod['sigz'],cmap='jet',s=9)
+ax[1,1].set_xlabel('x ($10^{-3}$ arcsec)',fontsize=20)
+ax[1,1].text(0.06, 0.88, '$\sigma_z$', style='oblique', transform=ax[1,1].transAxes,fontsize=27)
+mod2.set_clim(0, col_lim*(3/4))
+plt.colorbar(mod2,ax=ax[1,1])
 
 # Residual plots
-plt.subplot(2,3,3)
-plt.title('residual $v_z \,(km\,s^{-1})$',fontsize=27)
-plt.scatter(obs["x"],obs["y"],c=(mod['vz']-obs['vz']),cmap='jet',s=9)
-plt.xlabel('x (arcsec)',fontsize=20)
-plt.ylabel('y (arcsec)',fontsize=20)
-plt.clim(-col_lim, col_lim)
-cbar=plt.colorbar(orientation="vertical")
+res1 = ax[0,2].scatter(obs["x"]*1e3,obs["y"]*1e3,c=(mod['vz']-obs['vz']),cmap='jet',s=9)
+ax[0,2].set_title('residual $(km\,s^{-1})$',fontsize=25)
+ax[0,2].text(0.06, 0.88, '$v_z$', style='oblique', transform=ax[0,2].transAxes,fontsize=27)
+res1.set_clim(-col_lim, col_lim)
+plt.colorbar(res1,ax=ax[0,2])
 
-plt.subplot(2,3,6)
-plt.title('residual $\sigma_z\, (km\,s^{-1})$',fontsize=27)
-plt.scatter(obs["x"],obs["y"],c=(mod['sigz']-obs['sigz']),cmap='jet',s=9)
-plt.xlabel('x (arcsec)',fontsize=20)
-plt.ylabel('y (arcsec)',fontsize=20)
-plt.clim(-col_lim/2, col_lim/2)
-cbar=plt.colorbar(orientation="vertical")
-
-plt.tight_layout()
-plt.show()
-
-# Virial theorem
-#vsqr = vx_obs**2+vy_obs**2+vz_obs**2
-#vir = vsqr-G*(submass(Rdist))/Rdist
-#print(vir)
-
-
-prcnt_vel = abs((abs(mod['vz'])-abs(obs['vz']))/obs['vz'])*100
-prcnt_vel = [x for x in prcnt_vel if np.isnan(x) == False]  # remove nan values
-prcnt_sig = abs((mod['sigz']-obs['sigz'])/obs['sigz'])*100
-prcnt_sig = [x for x in prcnt_sig if np.isnan(x) == False]  # remove nan values
-
-print('Velocity residuals are, on average, ', np.mean(prcnt_vel),'% of the observations')
-print('Dispersion residuals are, on average, ', np.mean(prcnt_sig),'% of the observations')
+res2 = ax[1,2].scatter(obs["x"]*1e3,obs["y"]*1e3,c=(mod['sigz']-obs['sigz']),cmap='jet',s=9)
+ax[1,2].set_xlabel('x ($10^{-3}$ arcsec)',fontsize=20)
+ax[1,2].text(0.06, 0.88, '$\sigma_z$', style='oblique', transform=ax[1,2].transAxes,fontsize=27)
+res2.set_clim(-col_lim/2, col_lim/2)
+plt.colorbar(res2,ax=ax[1,2])
