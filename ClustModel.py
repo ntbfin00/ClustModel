@@ -6,7 +6,7 @@ from scipy.integrate import odeint
 from scipy import integrate
 from scipy.misc import derivative
 
-filepath='/Users/nathanfindlay/Gals_SummerProject/data_files/'#'/YOUR_FILEPATH'  # path to where input files are stored
+filepath='/YOUR_FILEPATH'  # path to where input files are stored
 
 # Define astronomical constants
 G = 4.3009125e-3 # (km/s)^2 pc/Msun
@@ -37,7 +37,6 @@ par = table.QTable.read(filepath + "clust_params.dat", format="ascii", names=["M
 c_par=10  # set NFW concentration parameter
 M200=par['M200'][0]  # set cluster halo M200 value (Msun)
 R200=par['R200'][0]  # set cluster halo R200 value (pc)
-
 beta=par['beta']  # set cluster anisotropy parameters as array
 
 #======================TRACER DENSITY FIT==============================
