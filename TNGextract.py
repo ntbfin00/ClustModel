@@ -30,9 +30,9 @@ snapNum=99  # snapshot number equivalent to z=0
 
 
 #=================EDIT THIS SECTION WITH YOUR DETAILS===================
-headers = {"api-key":"56fb3d0452d97e788e9fb75ef3bff17b"}#{"api-key":"YOUR_API_KEY"}  # insert your API key for IllustrisTNG
+headers = {"api-key":"YOUR_API_KEY"}  # insert your API key for IllustrisTNG
 
-filepath='/Users/nathanfindlay/Gals_SummerProject/data_files/'#'/YOUR_FILEPATH'  # path where output files should be stored
+filepath='/YOUR_FILEPATH'  # path where output files should be stored
 
 zobs=0.1
 Dist = (c*zobs/H0)*1e6  # set observer distance in pc (set here for cluster at z=0.1)
