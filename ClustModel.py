@@ -10,7 +10,6 @@ filepath='/Users/nathanfindlay/Gals_SummerProject/data_files/'#'/YOUR_FILEPATH' 
 
 # Define astronomical constants
 G = 4.3009125e-3 # (km/s)^2 pc/Msun
-c = 2.998e5  #km/s
 redshift=0
 scale_factor = 1.0 / (1+redshift)
 h = 0.6774 # choose your H0 
@@ -18,13 +17,28 @@ H0 = h*100 # km/Mpc/s
 cosmo = FlatLambdaCDM(H0=H0, Om0=0.2726)
 
 # Read in observations from file and add appropriate units
-obs = table.QTable.read(filepath + "obs.dat", format="ascii", names=["x","y","vz","sigz","M"])  
+obs = table.QTable.read(filepath + "obs.dat", format="ascii", names=["x","y","vz","sigz","M","R","zrel","vr"]) 
 obs["x"].unit = u.arcsec
 obs["y"].unit = u.arcsec
 obs["vz"].unit = u.km/u.s
 obs["sigz"].unit = u.km/u.s
-obs['M'].unit = u.solMass
 
+Rdist = obs['R']
+Rmax = np.max(Rdist)
+zrel = obs['zrel']
+
+# Read in cluster parameters from file and add appropriate units
+par = table.QTable.read(filepath + "clust_params.dat", format="ascii", names=["M200","R200","beta"])  
+
+
+#======================SET PARAMETERS TO FIT===========================
+
+# Use par table to use pre-determined parameters
+c_par=10  # set NFW concentration parameter
+M200=par['M200'][0]  # set cluster halo M200 value (Msun)
+R200=par['R200'][0]  # set cluster halo R200 value (pc)
+
+beta=par['beta']  # set cluster anisotropy parameters as array
 
 #======================TRACER DENSITY FIT==============================
 
@@ -50,7 +64,7 @@ for i in range(0,bins):
     logr[i] = (tracer_hist[1][i+1]-tracer_hist[1][i])/2+tracer_hist[1][i]
 
 plt.bar(logr,density)
-plt.title('Tracerumber density distribution')
+plt.title('Tracer number density distribution')
 plt.xlabel('ln(R) (pc)')
 plt.ylabel('Number density $(pc^{-3})$')
 plt.yscale("log")
@@ -98,11 +112,10 @@ def nfw(r,M200,R200,c):  # Msun/pc^3
 
     return nfw
 
-c=10  # set NFW concentration parameter
 halo_ext = 1.2*Rmax  # set extent of NFW profile in terms of distance of furthest tracer
 
 r = np.geomspace(1, halo_ext, 300)  # logarithmically spaced radii in pc
-y = nfw(r,M200,R200,c)  # The profile must be logarithmically sampled!
+y = nfw(r,M200,R200,c_par)  # The profile must be logarithmically sampled!
 
 # Plot NFW profile
 plt.title('NFW density profile')
@@ -113,14 +126,13 @@ plt.show()
 
 
 #===========================JEANS MODEL===================================
-beta=beta_obs  # enter anisotropy parameters as array
 
 def lognu(r):  # natural logarithm of tracer density in pc^-3
     return poly(np.log(r),a,deg)
 
 def submass(r):  # determine stellar mass enclosed at radius r
     objs = np.where(Rdist<r)
-    return np.sum(obs['M'][objs]/u.solMass)
+    return np.sum(obs['M'][objs])
 
 # Spherical Jeans equation (1st order differential equation)
 def jeansODE(vr,r,beta):
@@ -128,35 +140,50 @@ def jeansODE(vr,r,beta):
     if bindx>=len(beta):  # condition to ensure approximate solution doesn't breakdown
         bindx=len(beta)-1
     
-    rho = lambda r: r**2*nfw(r,M200,R200,c)  # integrate to obtain mass profile
+    rho = lambda r: r**2*nfw(r,M200,R200,c_par)  # integrate to obtain mass profile
     m_nfw = (4*np.pi*integrate.quad(rho, 0, r)[0])
   
     dvdr = -vr*(2*beta[bindx]/r + derivative(lognu, r, dx=1e-30))-(G/r**2)*(submass(r)+m_nfw)
     return dvdr
 
-vr0 = 0  # initial condition at cluster centre r=0 (arbitrary)
+
+vr0 = 0 # initial condition at cluster centre r=0 (arbitrary)
 nbins = 1000  # set number of velocity bins for the model
 rbin = np.linspace(1, Rmax, nbins)    # Rmin=1 to avoid division by 0
 
 # Solve ODE for radial velocity
 vr_rms = np.sqrt(abs(odeint(jeansODE, vr0, rbin,args=(beta,))))   # in km/s
 
-# Plot the rotation curve
-plt.plot(rbin,vr_rms)
-plt.title('Rotation curve')
-plt.ylabel('Radial v_rms (km/s)')
-plt.xlabel('Clustocentric radius (pc)')
-plt.xscale('log')
-
+vr_mod=np.zeros(len(Rdist))
 vz_mod=np.zeros(len(Rdist))
 sigma_mod=np.zeros(len(Rdist))
+gamma=np.zeros(len(Rdist))
 
-# Calculate vr in radius bins and determine vz projection
 rbin_indx = np.digitize(Rdist, rbin, right=True)
-for i in range(0,len(Rdist)):
-    vz_mod[i] = vr_rms[rbin_indx[i]]*(zrel[i]/Rdist[i])  # vz=vr.cos(theta)=vr.(z/r)
+
+for i in range(1,len(Rdist)):
+    vz_mod[0] = 0  # add primary subhalo vz
+    vr_mod[i] = vr_rms[rbin_indx[i]]  # sets abs(vr) for each object based on Jeans solution
+    if obs['vr'][i]<0:  # sets vr direction from observed vr
+        sign = -1
+    else:
+        sign = 1
+    vz_mod[i] = sign*vr_mod[i]*(zrel[i]/Rdist[i])  # vz=vr.cos(theta)=vr.(z/r)
+    
+# Plot the rotation curve
+plt.plot(rbin,vr_rms,label='solution')
+plt.scatter(Rdist[1:],vr_mod[1:],s=9,color='r',label='tracers')
+plt.title('Rotation curve')
+plt.ylabel('Radial $v_{rms}$ (km/s)')
+plt.xlabel('Clustocentric radius (pc)')
+plt.xscale('log')
+plt.xlim(np.min(Rdist[1:]),Rmax)
+plt.legend()
+plt.show()
 
 # Calculate dispersions by binning velocities in radius
+nsig_bin = 20  # number of velocity bins for dispersion calculations (same should be used in TNGextract)
+sig_bin = np.linspace(0, Rmax, nsig_bin)  # make evenly distributed bins
 sigbin_indx = np.digitize(Rdist, sig_bin, right=True)
 for i in range(0,len(rbin)):
     bin_objs = np.where(sigbin_indx == i)[0]  # determine what tracers lie in each annulus
@@ -176,61 +203,49 @@ mod["vz"].unit = u.km/u.s
 mod["sigz"].unit = u.km/u.s
 
 # Plot observations vs. model
-col_lim = 2500  # limit of colorbar
+col_lim = 2000  # limit of colorbar
 
-plt.figure(figsize=(15,8))
+f1, ax = plt.subplots(2,3,sharex='all', sharey='all',figsize=(15,8))
+f1.tight_layout()
+f1.show()
 
-# LOS velocity and dispersion maps for example
-plt.subplot(2,3,1)
-plt.title('observed $v_z \,(km\,s^{-1})$',fontsize=27)
-plt.scatter(obs["x"],obs["y"],c=obs['vz'],cmap='jet',s=9)
-plt.xlabel('x (arcsec)',fontsize=20)
-plt.ylabel('y (arcsec)',fontsize=20)
-plt.clim(-col_lim, col_lim)
-cbar=plt.colorbar(orientation="vertical")
+# Observed line of sight velocity and dispersion maps
+obs1 = ax[0,0].scatter(obs["x"]*1e3,obs["y"]*1e3,c=obs['vz'],cmap='jet',s=9)
+ax[0,0].set_title('observed $(km\,s^{-1})$',fontsize=25)
+ax[0,0].set_ylabel('y ($10^{-3}$ arcsec)',fontsize=20)
+ax[0,0].text(0.06, 0.88, '$v_z$', style='oblique', transform=ax[0,0].transAxes,fontsize=27)
+obs1.set_clim(-col_lim, col_lim)
+plt.colorbar(obs1,ax=ax[0,0])
 
-plt.subplot(2,3,4)
-plt.title('observed $\sigma_z\, (km\,s^{-1})$',fontsize=27)
-plt.scatter(obs["x"],obs["y"],c=obs['sigz'],cmap='jet',s=9)
-plt.xlabel('x (arcsec)',fontsize=20)
-plt.ylabel('y (arcsec)',fontsize=20)
-plt.clim(0, col_lim*(3/4))
-cbar=plt.colorbar(orientation="vertical")
+obs2 = ax[1,0].scatter(obs["x"]*1e3,obs["y"]*1e3,c=obs['sigz'],cmap='jet',s=9)
+ax[1,0].set_xlabel('x ($10^{-3}$ arcsec)',fontsize=20)
+ax[1,0].set_ylabel('y ($10^{-3}$ arcsec)',fontsize=20)
+ax[1,0].text(0.06, 0.88, '$\sigma_z$', style='oblique', transform=ax[1,0].transAxes,fontsize=27)
+obs2.set_clim(0, col_lim*(3/4))
+plt.colorbar(obs2,ax=ax[1,0])
 
-# line of sight velocity and dispersion maps for model
-plt.subplot(2,3,2)
-plt.title('model $v_z \,(km\,s^{-1})$',fontsize=27)
-plt.scatter(obs["x"],obs["y"],c=mod['vz'],cmap='jet',s=9)
-plt.xlabel('x (arcsec)',fontsize=20)
-plt.ylabel('y (arcsec)',fontsize=20)
-plt.clim(-col_lim, col_lim)
-cbar=plt.colorbar(orientation="vertical")
+# Model line of sight velocity and dispersion maps
+mod1 = ax[0,1].scatter(obs["x"]*1e3,obs["y"]*1e3,c=mod['vz'],cmap='jet',s=9)
+ax[0,1].set_title('model $(km\,s^{-1})$',fontsize=25)
+ax[0,1].text(0.06, 0.88, '$v_z$', style='oblique', transform=ax[0,1].transAxes,fontsize=27)
+mod1.set_clim(-col_lim, col_lim)
+plt.colorbar(mod1,ax=ax[0,1])
 
-plt.subplot(2,3,5)
-plt.title('model $\sigma_z\, (km\,s^{-1})$',fontsize=27)
-plt.scatter(obs["x"],obs["y"],c=mod['sigz'],cmap='jet',s=9)
-plt.xlabel('x (arcsec)',fontsize=20)
-plt.ylabel('y (arcsec)',fontsize=20)
-plt.clim(0, col_lim*(3/4))
-cbar=plt.colorbar(orientation="vertical")
+mod2 = ax[1,1].scatter(obs["x"]*1e3,obs["y"]*1e3,c=mod['sigz'],cmap='jet',s=9)
+ax[1,1].set_xlabel('x ($10^{-3}$ arcsec)',fontsize=20)
+ax[1,1].text(0.06, 0.88, '$\sigma_z$', style='oblique', transform=ax[1,1].transAxes,fontsize=27)
+mod2.set_clim(0, col_lim*(3/4))
+plt.colorbar(mod2,ax=ax[1,1])
 
 # Residual plots
-plt.subplot(2,3,3)
-plt.title('residual $v_z \,(km\,s^{-1})$',fontsize=27)
-plt.scatter(obs["x"],obs["y"],c=(mod['vz']-obs['vz']),cmap='jet',s=9)
-plt.xlabel('x (arcsec)',fontsize=20)
-plt.ylabel('y (arcsec)',fontsize=20)
-plt.clim(-col_lim, col_lim)
-cbar=plt.colorbar(orientation="vertical")
+res1 = ax[0,2].scatter(obs["x"]*1e3,obs["y"]*1e3,c=(mod['vz']-obs['vz']),cmap='jet',s=9)
+ax[0,2].set_title('residual $(km\,s^{-1})$',fontsize=25)
+ax[0,2].text(0.06, 0.88, '$v_z$', style='oblique', transform=ax[0,2].transAxes,fontsize=27)
+res1.set_clim(-col_lim, col_lim)
+plt.colorbar(res1,ax=ax[0,2])
 
-plt.subplot(2,3,6)
-plt.title('residual $\sigma_z\, (km\,s^{-1})$',fontsize=27)
-plt.scatter(obs["x"],obs["y"],c=(mod['sigz']-obs['sigz']),cmap='jet',s=9)
-plt.xlabel('x (arcsec)',fontsize=20)
-plt.ylabel('y (arcsec)',fontsize=20)
-plt.clim(-col_lim/2, col_lim/2)
-cbar=plt.colorbar(orientation="vertical")
-
-plt.tight_layout()
-plt.show()
-
+res2 = ax[1,2].scatter(obs["x"]*1e3,obs["y"]*1e3,c=(mod['sigz']-obs['sigz']),cmap='jet',s=9)
+ax[1,2].set_xlabel('x ($10^{-3}$ arcsec)',fontsize=20)
+ax[1,2].text(0.06, 0.88, '$\sigma_z$', style='oblique', transform=ax[1,2].transAxes,fontsize=27)
+res2.set_clim(-col_lim/2, col_lim/2)
+plt.colorbar(res2,ax=ax[1,2])
