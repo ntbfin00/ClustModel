@@ -15,9 +15,10 @@ scale_factor = 1.0 / (1+redshift)
 h = 0.6774 # choose your H0 
 H0 = h*100 # km/Mpc/s
 cosmo = FlatLambdaCDM(H0=H0, Om0=0.2726)
+rho_crit = (3*(H0/1e6)**2)/(8*np.pi*G)  # Msun/pc^3
 
 # Read in observations from file and add appropriate units
-obs = table.QTable.read(filepath + "obs.dat", format="ascii", names=["x","y","vz","sigz","M","R","zrel","vr"]) 
+obs = table.QTable.read(filepath + "obs.dat", format="ascii", names=["x","y","vz","sigz","M","R","zrel","vr","vphi","vtheta"]) 
 obs["x"].unit = u.arcsec
 obs["y"].unit = u.arcsec
 obs["vz"].unit = u.km/u.s
@@ -25,23 +26,36 @@ obs["sigz"].unit = u.km/u.s
 
 Rdist = obs['R']
 Rmax = np.max(Rdist)
-print(Rmax/2)
+Rmin = np.min(Rdist[1:])
 zrel = obs['zrel']
 
 # Read in cluster parameters from file and add appropriate units
-par = table.QTable.read(filepath + "clust_params.dat", format="ascii", names=["M200","R200","beta"])  
+#par = table.QTable.read(filepath + "clust_params.dat", format="ascii", names=["M200","R200","beta"])  
+par = table.QTable.read(filepath + "clust_params.dat", format="ascii", names=["M200","R200"])  
 
+def beta_obs(R200,cNFW):  # observed anisotropy parameters either side of critical radius
+    rc=R200/cNFW  # determine critical radius rc
+    
+    less_rc = np.where(Rdist[1:]<rc)[0]  # split either side
+    more_rc = np.where(Rdist[1:]>=rc)[0]
+    split = [less_rc, more_rc]
+    b = np.zeros(2)
+    for i in range(0,2):
+        r = split[i]
+        b[i] = 1 - (np.mean(obs['vphi'][1:][r]**2)+np.mean(obs['vtheta'][1:][r]**2))/(2*np.mean(obs['vr'][1:][r]**2))
+    return b
 
 #======================SET PARAMETERS TO FIT===========================
 
 # Use par table to use pre-determined parameters
-cNFW=15  # set NFW concentration parameter
-M200=par['M200'][0]  # set cluster halo M200 value (Msun)
-R200=par['R200'][0]  # set cluster halo R200 value (pc)
-beta=[0.5,0.6]#par['beta']  # set cluster anisotropy parameters as array
+cNFW = 15  # set NFW concentration parameter
+M200 = par['M200'][0]  # set cluster halo M200 value (Msun)
+R200 = par['R200'][0]  # set cluster halo R200 value (pc)
+# R200 = (3*M200/(4*np.pi*200*rho_crit))**(1/3) if not pre-determined
+
+beta=beta_obs(R200,cNFW)  # set cluster anisotropy parameters
 
 print('PARAMETERS:\nc =',cNFW,'| M200 =',M200,'| R200 =',R200,'| beta =',beta,'\n')
-
 
 
 #======================TRACER DENSITY FIT==============================
@@ -140,39 +154,26 @@ def submass(r):  # determine stellar mass enclosed at radius r
 
 # Spherical Jeans equation (1st order differential equation)
 def jeansODE(vr,r,beta):
-    bindx = int(np.floor(r/Rmax*len(beta)))  # index to determine which beta value to use
-    if bindx>=len(beta):  # condition to ensure approximate solution doesn't breakdown
-        bindx=len(beta)-1
-        
-        
-        
-        
-    #print(r/Rmax,beta[bindx])
-    
-    
-    
-    
+    rc=R200/cNFW
+    if r<Rmin:
+        B=1
+    elif r<rc:
+        B=beta[0]
+    #elif r<(Rmax-rc)/2:
+    #    B=beta[1]
+    else:
+        B=beta[1]
     
     rho = lambda r: r**2*nfw(r,M200,R200,cNFW)  # integrate to obtain mass profile
     m_nfw = (4*np.pi*integrate.quad(rho, 0, r)[0])
   
-    dvdr = -vr*(2*beta[bindx]/r + derivative(lognu, r, dx=1e-30))-(G/r**2)*(submass(r)+m_nfw)
+    dvdr = -vr*(2*B/r + derivative(lognu, r, dx=1e-30))-(G/r**2)*(submass(r)+m_nfw)
+
     return dvdr
 
 vr0 = 0  # initial condition at cluster centre r=0 (arbitrary)
-#vr0 = vrad[294]  # initial condition at cluster centre r=0 (arbitrary)
-
-
 nbins = 1000  # set number of velocity bins for the model
-
 rbin = np.linspace(1, Rmax, nbins)    # Rmin=1 to avoid division by 0
-
-#rbin = np.linspace(np.min(Rdist[1:]), Rmax, nbins)    # Rmin=1 to avoid division by 0
-
-
-
-
-
 
 # Solve ODE for radial velocity
 vr_rms = np.sqrt(abs(odeint(jeansODE, vr0**2, rbin,args=(beta,))))   # in km/s
