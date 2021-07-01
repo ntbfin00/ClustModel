@@ -39,6 +39,7 @@ zobs=0.1
 Dist = (c*zobs/H0)*1e6  # set observer distance in pc (set here for cluster at z=0.1)
 
 grnr = 2  # set FoF group number to work with (grnr=0 is not a relaxed cluster)
+
 #=======================================================================
 
 
@@ -103,7 +104,7 @@ xproj = np.arctan((xrel)/(Dist+(zrel)))
 yproj = np.arctan((yrel)/(Dist+(zrel)))
 print('Projected positions determined')
 
-# Determine radial distance from centre to tracer.
+# Determine radial distance from centre to tracer
 Rdist = np.sqrt((xrel)**2+(yrel)**2+(zrel)**2)  # in pc
 Rmax = np.max(Rdist)  # distance of furthest tracer
 
@@ -129,7 +130,7 @@ for i in range(0,num):
     my_subs = get(subhalos['results'][i]['url'])
     vx_obs[i] = my_subs['vel_x']-vcx  
     vy_obs[i] = my_subs['vel_y']-vcy
-    vz_obs[i] = my_subs['vel_z']-vcz  # velocity along line of sight (LoS)
+    vz_obs[i] = my_subs['vel_z']-vcz  # velocity along line of sight (LoS) in km/s
 print('Velocities calculated')
 
 # Bin velocities and calculate dispersions for each annulus.
@@ -155,9 +156,10 @@ print('Subhalo stellar masses extracted')
 
 # Convert velocities from cartesian to spherical
 def v_sph(r,x,y,z,vx,vy,vz):  
-    vrad = (x*vx+y*vy+z*vz)/r
-    vphi = (x*vy-y*vx)/np.sqrt(r**2-z**2)
-    vtheta = (z/(r*np.sqrt(r**2-z**2)))*(x*vx + y*vy + ((z/r)**2-1)*vz)
+    rminz = np.sqrt(r**2-z**2)
+    vrad = (x*vx + y*vy + z*vz)/r
+    vphi = (x*vy - y*vx)/rminz
+    vtheta = (z/(r*rminz))*(x*vx + y*vy - vz*(rminz**2)/z)
 
     vrad[r==0]=0  # set velocities to zero for primary subhalo
     vphi[r==0]=0
@@ -205,8 +207,8 @@ plt.colorbar(obs2,ax=ax[1])
 nbeta=2  # set number of beta parameters to use
 beta_obs=np.zeros(nbeta)
 for i in range(0,nbeta):
-    indx = np.where(Rdist[1:]<=Rmax/nbeta*(i+1))
-    beta_obs [i] = 1 - (np.mean(vphi[indx][1:]**2)+np.mean(vtheta[1:]**2))/(2*np.mean(vrad[1:]**2))
+    indx = np.where((Rdist[1:]<=(i+1)*Rmax/nbeta) & (Rdist[1:]>i*Rmax/nbeta))[0]
+    beta_obs [i] = 1 - (np.mean(vphi[1:][indx]**2)+np.mean(vtheta[1:][indx]**2))/(2*np.mean(vrad[1:][indx]**2))
 print('\nAnisotropy parameters calculated')
 
 # Write cluster parameters to file
