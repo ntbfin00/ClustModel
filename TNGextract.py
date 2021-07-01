@@ -38,7 +38,7 @@ filepath='/Users/nathanfindlay/Gals_SummerProject/data_files/'#'/YOUR_FILEPATH' 
 zobs=0.1
 Dist = (c*zobs/H0)*1e6  # set observer distance in pc (set here for cluster at z=0.1)
 
-grnr = 2  # set FoF group number to work with (grnr=0 is not a relaxed cluster)
+grnr = 1  # set FoF group number to work with (grnr=0 is not a relaxed cluster)
 
 #=======================================================================
 
@@ -169,14 +169,14 @@ def v_sph(r,x,y,z,vx,vy,vz):
 vrad,vphi,vtheta = v_sph(Rdist,xrel,yrel,zrel,vx_obs,vy_obs,vz_obs)
 
 # Write positions, LoS velocities, LoS dispersions and masses to file
-units = 'x\' (arcsecs)   y\' (arcsecs)   vz (km/s)   sigma_z (km/s)   Mstellar (Msun)   Rdist (pc)   z_rel (pc)   vr (km/s)'
-data = np.column_stack((xproj,yproj,vz_obs,sigma_obs,msub,Rdist,zrel,vrad))
+units = 'x\' (arcsecs)   y\' (arcsecs)   vz (km/s)   sigma_z (km/s)   Mstellar (Msun)   Rdist (pc)   z_rel (pc)   vr (km/s)   vphi (km/s)   vtheta (km/s)'
+data = np.column_stack((xproj,yproj,vz_obs,sigma_obs,msub,Rdist,zrel,vrad,vphi,vtheta))
 
 np.savetxt(filepath + 'obs.dat', data, header=units)
 print('Observations saved to file')
 
 # Read in observations from file and add appropriate units
-obs = table.QTable.read(filepath + "obs.dat", format="ascii", names=["x","y","vz","sigz","M","R","zrel","vr"])  
+obs = table.QTable.read(filepath + "obs.dat", format="ascii", names=["x","y","vz","sigz","M","R","zrel","vr","vphi","vtheta"])  
 obs["x"].unit = u.arcsec
 obs["y"].unit = u.arcsec
 obs["vz"].unit = u.km/u.s
@@ -202,7 +202,7 @@ ax[1].set_ylabel('y ($10^{-3}$ arcsec)',fontsize=20)
 obs2.set_clim(0, col_lim*(3/4))
 plt.colorbar(obs2,ax=ax[1])
 
-
+'''
 # Determine real anisotropy parameters for observations
 nbeta=2  # set number of beta parameters to use
 beta_obs=np.zeros(nbeta)
@@ -222,3 +222,14 @@ R200arr[0] = R200
 data = np.column_stack((M200arr,R200arr,beta_obs)) 
 np.savetxt(filepath + 'clust_params.dat', data, header=units)
 print('Cluster parameters saved to file')
+'''
+# Write M200 and R200 to file
+units = 'M200 (Msun)   R200 (pc)'
+data = np.column_stack((M200,R200)) 
+np.savetxt(filepath + 'clust_params.dat', data, header=units)
+print('Cluster parameters saved to file')
+
+
+
+
+
