@@ -202,27 +202,6 @@ ax[1].set_ylabel('y ($10^{-3}$ arcsec)',fontsize=20)
 obs2.set_clim(0, col_lim*(3/4))
 plt.colorbar(obs2,ax=ax[1])
 
-'''
-# Determine real anisotropy parameters for observations
-nbeta=2  # set number of beta parameters to use
-beta_obs=np.zeros(nbeta)
-for i in range(0,nbeta):
-    indx = np.where((Rdist[1:]<=(i+1)*Rmax/nbeta) & (Rdist[1:]>i*Rmax/nbeta))[0]
-    beta_obs [i] = 1 - (np.mean(vphi[1:][indx]**2)+np.mean(vtheta[1:][indx]**2))/(2*np.mean(vrad[1:][indx]**2))
-print('\nAnisotropy parameters calculated')
-
-# Write cluster parameters to file
-units = 'M200 (Msun)   R200 (pc)   Beta'
-
-M200arr = np.zeros(len(beta_obs))  # M200 and R200 are in first row in table
-M200arr[0] = M200   
-R200arr = np.zeros(len(beta_obs))
-R200arr[0] = R200  
-
-data = np.column_stack((M200arr,R200arr,beta_obs)) 
-np.savetxt(filepath + 'clust_params.dat', data, header=units)
-print('Cluster parameters saved to file')
-'''
 # Write M200 and R200 to file
 units = 'M200 (Msun)   R200 (pc)'
 data = np.column_stack((M200,R200)) 
