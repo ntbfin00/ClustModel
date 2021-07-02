@@ -55,7 +55,7 @@ def beta_obs(R200,cNFW):  # observed anisotropy parameters either side of critic
 #======================SET PARAMETERS TO FIT===========================
 
 # Use par table to use pre-determined parameters
-cNFW = 6.5  # set NFW concentration parameter
+cNFW = 15  # set NFW concentration parameter
 M200 = par['M200'][0]  # set cluster halo M200 value (Msun)
 R200 = par['R200'][0]  # set cluster halo R200 value (pc)
 # If R200 not pre-determined use R200 = (3*M200/(4*np.pi*200*rho_crit))**(1/3)
@@ -219,7 +219,7 @@ for n in range(0,7):
 
 #==========================CREATE PLOTS===========================
 
-col_lim = 1200  # limit of colorbar
+col_lim = 1500  # limit of colorbar
 rows = ['c','M200','Beta']
 
 f1, axes= plt.subplots(4,2,sharex='all', sharey='all',figsize=(11,14))
@@ -230,8 +230,6 @@ for ax, row in zip(axes[1:,0], rows):
     ax.annotate(row, xy=(0, 0.5), xytext=(-ax.yaxis.labelpad - pad, 0),
                 xycoords=ax.yaxis.label, textcoords='offset points',
                 size=27, ha='center', va='center',style='italic')
-
-
 
 f1.tight_layout()
 f1.subplots_adjust(left=0.15, top=0.95)
