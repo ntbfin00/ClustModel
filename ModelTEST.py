@@ -135,8 +135,7 @@ for n in range(0,7):
             n = deg - i
             p = p + a[i]*x**n
             return p
-
-
+        
 
 #======================DARK MATTER NFW DENSITY PROFILE=======================
 
@@ -218,116 +217,12 @@ for n in range(0,7):
     disps[n] = sigma_mod
 
 
+#==========================CREATE PLOTS===========================
 
-
-
-'''
-# Plot observations vs. model
 col_lim = 1200  # limit of colorbar
-
-rows = ['c','M200','Beta']
-
-f1, axes = plt.subplots(3,4,sharex='all', sharey='all',figsize=(25,12))
-
-pad = 60 # in points
-
-for ax, row in zip(axes[:,0], rows):
-    ax.annotate(row, xy=(0, 0.5), xytext=(-ax.yaxis.labelpad - pad, 0),
-                xycoords=ax.yaxis.label, textcoords='offset points',
-                size=27, ha='center', va='center',style='italic')
-
-f1.tight_layout()
-f1.subplots_adjust(left=0.15, top=0.95)
-f1.show()
-
-# Observed maps
-obsC = axes[0,0].scatter(obs["x"]*1e3,obs["y"]*1e3,c=obs['sigz'],cmap='jet',s=9)
-axes[0,0].set_title('observed $(km\,s^{-1})$',fontsize=25)
-axes[0,0].set_ylabel('y ($10^{-3}$ arcsec)',fontsize=20, rotation='vertical')
-#axes[0,0].annotate('c', xy=(0, 0.5), xytext=(-ax.yaxis.labelpad - 5, 0),xycoords=ax.yaxis.label, textcoords='offset points',size='large', ha='right', va='center')
-axes[0,0].text(0.06, 0.88, '$\sigma_z$', style='oblique', transform=axes[0,0].transAxes,fontsize=27)
-obsC.set_clim(0, col_lim)
-plt.colorbar(obsC,ax=axes[0,0])
-
-obsM = axes[1,0].scatter(obs["x"]*1e3,obs["y"]*1e3,c=obs['sigz'],cmap='jet',s=9)
-axes[1,0].set_ylabel('y ($10^{-3}$ arcsec)',fontsize=20)
-axes[1,0].text(0.06, 0.88, '$\sigma_z$', style='oblique', transform=axes[1,0].transAxes,fontsize=27)
-obsM.set_clim(0, col_lim)
-plt.colorbar(obsM,ax=axes[1,0])
-
-obsB = axes[2,0].scatter(obs["x"]*1e3,obs["y"]*1e3,c=obs['sigz'],cmap='jet',s=9)
-axes[2,0].set_xlabel('x ($10^{-3}$ arcsec)',fontsize=20)
-axes[2,0].set_ylabel('y ($10^{-3}$ arcsec)',fontsize=20)
-axes[2,0].text(0.06, 0.88, '$\sigma_z$', style='oblique', transform=axes[2,0].transAxes,fontsize=27)
-obsB.set_clim(0, col_lim)
-plt.colorbar(obsB,ax=axes[2,0])
-
-# Model -percent maps
-minC = axes[0,1].scatter(obs["x"]*1e3,obs["y"]*1e3,c=disps[1],cmap='jet',s=9)
-axes[0,1].set_title('model -'+str(percent)+'% $(km\,s^{-1})$',fontsize=25)
-axes[0,1].text(0.06, 0.88, '$\sigma_z$', style='oblique', transform=axes[0,1].transAxes,fontsize=27)
-minC.set_clim(0, col_lim)
-plt.colorbar(minC,ax=axes[0,1])
-
-minM = axes[1,1].scatter(obs["x"]*1e3,obs["y"]*1e3,c=disps[2],cmap='jet',s=9)
-axes[1,1].text(0.06, 0.88, '$\sigma_z$', style='oblique', transform=axes[1,1].transAxes,fontsize=27)
-minM.set_clim(0, col_lim)
-plt.colorbar(minM,ax=axes[1,1])
-
-minB = axes[2,1].scatter(obs["x"]*1e3,obs["y"]*1e3,c=disps[3],cmap='jet',s=9)
-axes[2,1].set_xlabel('x ($10^{-3}$ arcsec)',fontsize=20)
-axes[2,1].text(0.06, 0.88, '$\sigma_z$', style='oblique', transform=axes[2,1].transAxes,fontsize=27)
-minB.set_clim(0, col_lim)
-plt.colorbar(minB,ax=axes[2,1])
-
-# Model fit to Illustris parameters 
-bestC = axes[0,2].scatter(obs["x"]*1e3,obs["y"]*1e3,c=disps[0],cmap='jet',s=9)
-axes[0,2].set_title('model fit $(km\,s^{-1})$',fontsize=25)
-axes[0,2].text(0.06, 0.88, '$\sigma_z$', style='oblique', transform=axes[0,2].transAxes,fontsize=27)
-bestC.set_clim(0, col_lim)
-plt.colorbar(bestC,ax=axes[0,2])
-
-bestM = axes[1,2].scatter(obs["x"]*1e3,obs["y"]*1e3,c=disps[0],cmap='jet',s=9)
-axes[1,2].text(0.06, 0.88, '$\sigma_z$', style='oblique', transform=axes[1,2].transAxes,fontsize=27)
-bestM.set_clim(0, col_lim)
-plt.colorbar(bestM,ax=axes[1,2])
-
-bestB = axes[2,2].scatter(obs["x"]*1e3,obs["y"]*1e3,c=disps[0],cmap='jet',s=9)
-axes[2,2].set_xlabel('x ($10^{-3}$ arcsec)',fontsize=20)
-axes[2,2].text(0.06, 0.88, '$\sigma_z$', style='oblique', transform=axes[2,2].transAxes,fontsize=27)
-bestB.set_clim(0, col_lim)
-plt.colorbar(bestB,ax=axes[2,2])
-
-# Model +percent maps
-plusC = axes[0,3].scatter(obs["x"]*1e3,obs["y"]*1e3,c=disps[4],cmap='jet',s=9)
-axes[0,3].set_title('model +'+str(percent)+'% $(km\,s^{-1})$',fontsize=25)
-axes[0,3].text(0.06, 0.88, '$\sigma_z$', style='oblique', transform=axes[0,3].transAxes,fontsize=27)
-plusC.set_clim(0, col_lim)
-plt.colorbar(plusC,ax=axes[0,3])
-
-plusM = axes[1,3].scatter(obs["x"]*1e3,obs["y"]*1e3,c=disps[5],cmap='jet',s=9)
-axes[1,3].text(0.06, 0.88, '$\sigma_z$', style='oblique', transform=axes[1,3].transAxes,fontsize=27)
-plusM.set_clim(0, col_lim)
-plt.colorbar(plusM,ax=axes[1,3])
-
-plusB = axes[2,3].scatter(obs["x"]*1e3,obs["y"]*1e3,c=disps[6],cmap='jet',s=9)
-axes[2,3].text(0.06, 0.88, '$\sigma_z$', style='oblique', transform=axes[2,3].transAxes,fontsize=27)
-axes[2,3].set_xlabel('x ($10^{-3}$ arcsec)',fontsize=20)
-plusB.set_clim(0, col_lim)
-plt.colorbar(plusB,ax=axes[2,3])
-'''
-
-
-
-# Plot observations vs. model
-col_lim = 1200  # limit of colorbar
-
 rows = ['c','M200','Beta']
 
 f1, axes= plt.subplots(4,2,sharex='all', sharey='all',figsize=(11,14))
-
-
-
 
 pad = 50 # in points
 
@@ -340,29 +235,19 @@ for ax, row in zip(axes[1:,0], rows):
 
 f1.tight_layout()
 f1.subplots_adjust(left=0.15, top=0.95)
-#f1.show()
-
-
-
-
 
 # Observed map
-
 observed = axes[0,0].scatter(obs["x"]*1e3,obs["y"]*1e3,c=obs['sigz'],cmap='jet',s=9)
 axes[0,0].set_title('observed $(km\,s^{-1})$',fontsize=25)
 axes[0,0].set_ylabel('y ($10^{-3}$ arcsec)',fontsize=20)
 axes[0,0].text(0.06, 0.88, '$\sigma_z$', style='oblique', transform=axes[0,0].transAxes,fontsize=27)
 observed.set_clim(0, col_lim)
-#plt.colorbar(observed,ax=axes[0,0])
-
 
 # Model fit to Illustris parameters 
 best = axes[0,1].scatter(obs["x"]*1e3,obs["y"]*1e3,c=disps[0],cmap='jet',s=9)
 axes[0,1].set_title('model fit $(km\,s^{-1})$',fontsize=25)
 axes[0,1].text(0.06, 0.88, '$\sigma_z$', style='oblique', transform=axes[0,1].transAxes,fontsize=27)
 best.set_clim(0, col_lim)
-#plt.colorbar(best,ax=axes[0,1])
-
 
 # Model -percent maps
 minC = axes[1,0].scatter(obs["x"]*1e3,obs["y"]*1e3,c=disps[1],cmap='jet',s=9)
@@ -403,8 +288,6 @@ axes[3,1].set_xlabel('x ($10^{-3}$ arcsec)',fontsize=20)
 plusB.set_clim(0, col_lim)
 plt.colorbar(plusB,ax=axes[3,1])
 
-
-
 box1 = axes[0,0].get_position()
 box2 = axes[0,1].get_position()
 box1.x1 = box1.x1 - 0.08
@@ -416,15 +299,10 @@ box2.y1 = box2.y1 + 0.03
 axes[0,0].set_position(box1,which='both')
 axes[0,1].set_position(box2,which='both')
 
-
 cax1 = f1.add_axes([box1.x1+0.02,box1.y0,0.014,box1.y1-box1.y0])
 cax2 = f1.add_axes([box2.x1+0.02,box2.y0,0.014,box2.y1-box2.y0])
 
 plt.colorbar(observed,cax=cax1)
 plt.colorbar(best,cax=cax2)
-
-
-
-
 
 plt.show()
