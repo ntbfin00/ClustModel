@@ -41,11 +41,11 @@ zrel = obs['zrel']
 par = table.QTable.read(filepath + "clust_params.dat", format="ascii", names=["M200","R200"])  
 
 def beta_obs(R200,cNFW):  # observed anisotropy parameters either side of critical radius
-    rc=R200/cNFW  # determine critical radius rc
+    Rs=R200/cNFW  # determine scale radius Rs
     
-    less_rc = np.where(Rdist[1:]<rc)[0]  # split either side
-    more_rc = np.where(Rdist[1:]>=rc)[0]
-    split = [less_rc, more_rc]
+    less_Rs = np.where(Rdist[1:]<Rs)[0]  # split either side
+    more_Rs = np.where(Rdist[1:]>=Rs)[0]
+    split = [less_Rs, more_Rs]
     b = np.zeros(2)
     for i in range(0,2):
         r = split[i]
@@ -55,32 +55,42 @@ def beta_obs(R200,cNFW):  # observed anisotropy parameters either side of critic
 #======================SET PARAMETERS TO FIT===========================
 
 # Use par table to use pre-determined parameters
-cNFW = 15  # set NFW concentration parameter
+cNFW = 4.3  # set NFW concentration parameter
 M200 = par['M200'][0]  # set cluster halo M200 value (Msun)
 R200 = par['R200'][0]  # set cluster halo R200 value (pc)
 # If R200 not pre-determined use R200 = (3*M200/(4*np.pi*200*rho_crit))**(1/3)
 
-beta=beta_obs(R200,cNFW)  # set cluster anisotropy parameters
+#Rs=R200/cNFW  # scale radius in pc
 
-print('PARAMETERS:\nc =',cNFW,'| M200 =',M200,'| R200 =',R200,'| beta =',beta,'\n')
+beta = beta_obs(R200,cNFW)  # set cluster anisotropy parameters
+
+print('STARTING PARAMETERS:\nc =',cNFW,'| M200 =',M200,'| R200 =',R200,'| beta =',beta,'\n')
 
 #=========================VARY PARAMETERS===============================
-
+'''
 def vary_param(factor):  # vary parameters by a chosen factor
     c_var = factor*cNFW  
     M200_var = factor*M200   
     R200_var = ((factor)**(1/3))*R200
     beta_var = factor*beta_obs(R200,cNFW)  # set cluster anisotropy parameters
     return c_var, M200_var, beta_var, R200_var
-
+'''
+def vary_param(percent):  # vary parameters by a chosen factor
+    factor = 1+(percent/100)
+    log_factor = 10**(percent/10)
+    c_var = factor*cNFW  
+    M200_var = (log_factor)*M200   
+    R200_var = (log_factor**(1/3))*R200
+    beta_var = factor*beta_obs(R200,cNFW)  # set cluster anisotropy parameters
+    return c_var, M200_var, beta_var, R200_var 
 
 vels = np.zeros((9,len(Rdist)))
 disps = np.zeros((9,len(Rdist)))
 
-percent = 15  # set percentage to vary parameter
-min_par = vary_param(1-(percent/100))  # parameters -percent
-novar_par = vary_param(1)  # unchanged parameters
-plus_par = vary_param(1+(percent/100))  # parameters +percent
+percent = 10  # set percentage to vary parameter
+min_par = vary_param(-percent)  # parameters -percent
+novar_par = vary_param(0)  # unchanged parameters
+plus_par = vary_param(percent)  # parameters +percent
 
 test_par = np.concatenate((min_par[:-1],plus_par[:-1]))  # parameters to test
 
@@ -124,7 +134,7 @@ for n in range(0,7):
     r_fit = np.delete(logr, no_val)
     dens_fit = np.delete(density, no_val)
 
-    xnew = np.linspace(np.min(logr), np.max(logr),1000)
+    #xnew = np.linspace(np.min(logr), np.max(logr),1000)
 
     deg = 5  # chosen polynomial degree
     a = np.polyfit(r_fit,np.log(dens_fit),deg)
@@ -149,9 +159,6 @@ for n in range(0,7):
 
     halo_ext = 1.2*Rmax  # set extent of NFW profile in terms of distance of furthest tracer
 
-    r = np.geomspace(1, halo_ext, 300)  # logarithmically spaced radii in pc
-    y = nfw(r,M200,R200,cNFW)
-
 
 #===========================JEANS MODEL===================================
 
@@ -163,7 +170,7 @@ for n in range(0,7):
         return np.sum(obs['M'][objs])
 
     # Spherical Jeans equation (1st order differential equation)
-    def jeansODE(vr,r,beta):
+    def jeansODE(vr,r,beta,M200,R200,cNFW):
         rc=R200/cNFW
         if r<Rmin:
             B=1
@@ -184,7 +191,7 @@ for n in range(0,7):
     rbin = np.linspace(1, Rmax, nbins)    # Rmin=1 to avoid division by 0
 
     # Solve ODE for radial velocity
-    vr_rms = np.sqrt(abs(odeint(jeansODE, vr0**2, rbin,args=(beta,))))   # in km/s
+    vr_rms = np.sqrt(abs(odeint(jeansODE, vr0**2, rbin,args=(beta,M200,R200,cNFW))))   # in km/s
 
     vr_mod=np.zeros(len(Rdist))
     vz_mod=np.zeros(len(Rdist))
@@ -220,7 +227,7 @@ for n in range(0,7):
 #==========================CREATE PLOTS===========================
 
 col_lim = 1500  # limit of colorbar
-rows = ['c','M200','Beta']
+rows = ['c','$M_{200}$',r'$\beta$']
 
 f1, axes= plt.subplots(4,2,sharex='all', sharey='all',figsize=(11,14))
 
@@ -304,3 +311,179 @@ plt.colorbar(observed,cax=cax1)
 plt.colorbar(best,cax=cax2)
 
 plt.show()
+
+
+#=======================PLOT RESIDUALS===========================
+
+f2, axes= plt.subplots(4,2,sharex='all', sharey='all',figsize=(11,14))
+
+pad = 50 # in points
+
+for ax, row in zip(axes[1:,0], rows):
+    ax.annotate(row, xy=(0, 0.5), xytext=(-ax.yaxis.labelpad - pad, 0),
+                xycoords=ax.yaxis.label, textcoords='offset points',
+                size=27, ha='center', va='center',style='italic')
+
+f2.tight_layout()
+f2.subplots_adjust(left=0.15, top=0.95)
+
+# Observed map
+observed = axes[0,0].scatter(obs["x"]*1e3,obs["y"]*1e3,c=obs['sigz'],cmap='jet',s=9)
+axes[0,0].set_title('observed $(km\,s^{-1})$',fontsize=25)
+axes[0,0].set_ylabel('y ($10^{-3}$ arcsec)',fontsize=20)
+axes[0,0].text(0.06, 0.88, '$\sigma_z$', style='oblique', transform=axes[0,0].transAxes,fontsize=27)
+observed.set_clim(0, col_lim)
+
+# Model fit to Illustris parameters 
+best = axes[0,1].scatter(obs["x"]*1e3,obs["y"]*1e3,c=(disps[0]*u.km/u.s-obs['sigz']),cmap='jet',s=9)
+axes[0,1].set_title('model residual $(km\,s^{-1})$',fontsize=25)
+axes[0,1].text(0.06, 0.88, '$\sigma_z$', style='oblique', transform=axes[0,1].transAxes,fontsize=27)
+best.set_clim(-col_lim/2, col_lim/2)
+
+# Model -percent maps
+minC = axes[1,0].scatter(obs["x"]*1e3,obs["y"]*1e3,c=(disps[1]*u.km/u.s-obs['sigz']),cmap='jet',s=9)
+axes[1,0].set_title('residual -'+str(percent)+'% $(km\,s^{-1})$',fontsize=25)
+axes[1,0].set_ylabel('y ($10^{-3}$ arcsec)',fontsize=20)
+axes[1,0].text(0.06, 0.88, '$\sigma_z$', style='oblique', transform=axes[1,0].transAxes,fontsize=27)
+minC.set_clim(-col_lim/2, col_lim/2)
+plt.colorbar(minC,ax=axes[1,0])
+
+minM = axes[2,0].scatter(obs["x"]*1e3,obs["y"]*1e3,c=(disps[2]*u.km/u.s-obs['sigz']),cmap='jet',s=9)
+axes[2,0].set_ylabel('y ($10^{-3}$ arcsec)',fontsize=20)
+axes[2,0].text(0.06, 0.88, '$\sigma_z$', style='oblique', transform=axes[2,0].transAxes,fontsize=27)
+minM.set_clim(-col_lim/2, col_lim/2)
+plt.colorbar(minM,ax=axes[2,0])
+
+minB = axes[3,0].scatter(obs["x"]*1e3,obs["y"]*1e3,c=(disps[3]*u.km/u.s-obs['sigz']),cmap='jet',s=9)
+axes[3,0].set_xlabel('x ($10^{-3}$ arcsec)',fontsize=20)
+axes[3,0].set_ylabel('y ($10^{-3}$ arcsec)',fontsize=20)
+axes[3,0].text(0.06, 0.88, '$\sigma_z$', style='oblique', transform=axes[3,0].transAxes,fontsize=27)
+minB.set_clim(-col_lim/2, col_lim/2)
+plt.colorbar(minB,ax=axes[3,0])
+
+# Model +percent maps
+plusC = axes[1,1].scatter(obs["x"]*1e3,obs["y"]*1e3,c=(disps[4]*u.km/u.s-obs['sigz']),cmap='jet',s=9)
+axes[1,1].set_title('residual +'+str(percent)+'% $(km\,s^{-1})$',fontsize=25)
+axes[1,1].text(0.06, 0.88, '$\sigma_z$', style='oblique', transform=axes[1,1].transAxes,fontsize=27)
+plusC.set_clim(-col_lim/2, col_lim/2)
+plt.colorbar(plusC,ax=axes[1,1])
+
+plusM = axes[2,1].scatter(obs["x"]*1e3,obs["y"]*1e3,c=(disps[5]*u.km/u.s-obs['sigz']),cmap='jet',s=9)
+axes[2,1].text(0.06, 0.88, '$\sigma_z$', style='oblique', transform=axes[2,1].transAxes,fontsize=27)
+plusM.set_clim(-col_lim/2, col_lim/2)
+plt.colorbar(plusM,ax=axes[2,1])
+
+plusB = axes[3,1].scatter(obs["x"]*1e3,obs["y"]*1e3,c=(disps[6]*u.km/u.s-obs['sigz']),cmap='jet',s=9)
+axes[3,1].text(0.06, 0.88, '$\sigma_z$', style='oblique', transform=axes[3,1].transAxes,fontsize=27)
+axes[3,1].set_xlabel('x ($10^{-3}$ arcsec)',fontsize=20)
+plusB.set_clim(-col_lim/2, col_lim/2)
+plt.colorbar(plusB,ax=axes[3,1])
+
+box1 = axes[0,0].get_position()
+box2 = axes[0,1].get_position()
+box1.x1 = box1.x1 - 0.08
+box1.y0 = box1.y0 + 0.03
+box1.y1 = box1.y1 + 0.03
+box2.x1 = box2.x1 - 0.08
+box2.y0 = box2.y0 + 0.03
+box2.y1 = box2.y1 + 0.03
+axes[0,0].set_position(box1,which='both')
+axes[0,1].set_position(box2,which='both')
+
+cax1 = f2.add_axes([box1.x1+0.02,box1.y0,0.014,box1.y1-box1.y0])
+cax2 = f2.add_axes([box2.x1+0.02,box2.y0,0.014,box2.y1-box2.y0])
+
+plt.colorbar(observed,cax=cax1)
+plt.colorbar(best,cax=cax2)
+
+plt.show()
+
+
+#==================RESIDUAL AVERAGE WITH VARYING PARAMETER=================
+
+steps = 50  # set number of steps to vary parameters by 
+mean_err = np.zeros((4,steps))
+c_var = np.linspace(0.1,40,steps)
+M_var = np.geomspace(1e9,1e22,steps)
+B_var = np.linspace(-1,1,steps)
+
+for j in range(0,4):  # vary c, M200 and both beta parameters seperately
+    par_name = ['c','M200','Beta 1','Beta 2']
+    print('Varying '+str(par_name[j])+' parameter...')
+    for n in range(0,steps):
+        cNFW, M200, beta, R200 = novar_par  # set to unvaried values
+        if j==0:
+            cNFW = c_var[n]
+        if j==1:
+            M200 = M_var[n]
+            R200 = novar_par[3]*(M200/novar_par[1])  # vary R200 proportionally 
+        if j==2:
+            beta = [B_var[n],beta[1]]
+        if j==3:
+            beta = [beta[0],B_var[n]]
+
+        # Solve ODE for radial velocity
+        vr_rms = np.sqrt(abs(odeint(jeansODE, vr0**2, rbin,args=(beta,M200,R200,cNFW))))  # in km/s
+
+        vr_mod=np.zeros(len(Rdist))
+        vz_mod=np.zeros(len(Rdist))
+        sigma_mod=np.zeros(len(Rdist))
+        gamma=np.zeros(len(Rdist))
+
+        for i in range(1,len(Rdist)):
+            vz_mod[0] = 0  # add primary subhalo vz
+            vr_mod[i] = vr_rms[rbin_indx[i]]  # sets abs(vr) for each object based on Jeans solution
+            if obs['vr'][i]<0:  # sets vr direction from observed vr
+                sign = -1
+            else:
+                sign = 1
+            vz_mod[i] = sign*vr_mod[i]*(zrel[i]/Rdist[i])  # vz=vr.cos(theta)=vr.(z/r)
+    
+
+        # Calculate dispersions by binning velocities in radius
+        for i in range(0,len(rbin)):
+            bin_objs = np.where(sigbin_indx == i)[0]  # determine what tracers lie in each annulus
+            v_ms = np.mean(vz_mod[bin_objs]**2)  # mean of the square velocities
+            v_sm = np.mean(vz_mod[bin_objs])**2  # square of the mean velocities
+            sigma_mod[bin_objs] = np.sqrt(v_ms - v_sm)  # set sigma for each tracer in annulus
+
+        # Calculate average residual percentage 
+        prcnt_sig = abs((sigma_mod*u.km/u.s-obs['sigz'])/obs['sigz'])*100
+        prcnt_sig = [x for x in prcnt_sig if np.isnan(x) == False]  # remove nan values
+        mean_err[j][n] = np.mean(prcnt_sig)
+
+# Set for each parameter
+c_err = mean_err[0]
+M_err = mean_err[1]
+B1_err = mean_err[2] 
+B2_err = mean_err[3]
+
+# Plot average residual with parameter value
+f3, ((ax1,ax2,ax3,ax4))= plt.subplots(4,1,figsize=((5,12)))
+f3.tight_layout(pad=2.5)
+f3.show()
+
+ax1.plot(c_var,c_err)
+ax1.axvline(x=novar_par[0],linestyle='--',color='g',label='Visual fit')
+ax1.set_xlabel('c parameter',fontsize=15)
+ax1.set_ylabel('$(\sigma_{mod}-\sigma_{obs})/\sigma_{obs}\,\, (\%)$',fontsize=15)
+ax1.legend()
+
+ax2.plot(M_var,M_err)
+ax2.axvline(x=novar_par[1],linestyle='--',color='r',label='Illustris value')
+ax2.set_xlabel('$M_{200}$ parameter',fontsize=15)
+ax2.set_ylabel('$(\sigma_{mod}-\sigma_{obs})/\sigma_{obs}\,\, (\%)$',fontsize=15)
+ax2.set_xscale('log')
+ax2.legend()
+
+ax3.plot(B_var,B1_err)
+ax3.axvline(x=novar_par[2][0],linestyle='--',color='r',label='Illustris value')
+ax3.set_xlabel(r'$\beta$'+' interior to $R_s$',fontsize=15)
+ax3.set_ylabel('$(\sigma_{mod}-\sigma_{obs})/\sigma_{obs}\,\, (\%)$',fontsize=15)
+ax3.legend()
+
+ax4.plot(B_var,B2_err)
+ax4.axvline(x=novar_par[2][1],linestyle='--',color='r',label='Illustris value')
+ax4.set_xlabel(r'$\beta$'+' exterior to $R_s$',fontsize=15)
+ax4.set_ylabel('$(\sigma_{mod}-\sigma_{obs})/\sigma_{obs}\,\, (\%)$',fontsize=15)
+ax4.legend()
