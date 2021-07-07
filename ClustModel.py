@@ -30,15 +30,12 @@ Rmin = np.min(Rdist[1:])
 zrel = obs['zrel']
 
 # Read in cluster parameters from file and add appropriate units
-#par = table.QTable.read(filepath + "clust_params.dat", format="ascii", names=["M200","R200","beta"])  
 par = table.QTable.read(filepath + "clust_params.dat", format="ascii", names=["M200","R200"])  
 
-def beta_obs(R200,cNFW):  # observed anisotropy parameters either side of critical radius
-    rc=R200/cNFW  # determine critical radius rc
-    
-    less_rc = np.where(Rdist[1:]<rc)[0]  # split either side
-    more_rc = np.where(Rdist[1:]>=rc)[0]
-    split = [less_rc, more_rc]
+def beta_obs(Rs,cNFW):  # observed anisotropy parameters either side of critical radius    
+    less_Rs = np.where(Rdist[1:]<Rs)[0]  # split either side
+    more_Rs = np.where(Rdist[1:]>=Rs)[0]
+    split = [less_Rs, more_Rs]
     b = np.zeros(2)
     for i in range(0,2):
         r = split[i]
@@ -48,12 +45,14 @@ def beta_obs(R200,cNFW):  # observed anisotropy parameters either side of critic
 #======================SET PARAMETERS TO FIT===========================
 
 # Use par table to use pre-determined parameters
-cNFW = 15  # set NFW concentration parameter
+cNFW = 7  # set NFW concentration parameter
 M200 = par['M200'][0]  # set cluster halo M200 value (Msun)
 R200 = par['R200'][0]  # set cluster halo R200 value (pc)
-# R200 = (3*M200/(4*np.pi*200*rho_crit))**(1/3) if not pre-determined
+# If R200 not pre-determined use R200 = (3*M200/(4*np.pi*200*rho_crit))**(1/3)
 
-beta=beta_obs(R200,cNFW)  # set cluster anisotropy parameters
+Rs=R200/cNFW  # scale radius in pc
+
+beta = beta_obs(Rs,cNFW)  # set cluster anisotropy parameters
 
 print('PARAMETERS:\nc =',cNFW,'| M200 =',M200,'| R200 =',R200,'| beta =',beta,'\n')
 
@@ -122,8 +121,7 @@ plt.show()
 
 #======================DARK MATTER NFW DENSITY PROFILE=======================
 
-def nfw(r,M200,R200,c):  # Msun/pc^3
-    Rs=R200/c  # in pc
+def nfw(r,M200,Rs,c):  # Msun/pc^3
     A_nfw = np.log(1+c) - c/(1+c)
     
     nfw = M200/(4*np.pi*Rs**3*A_nfw*(r/Rs)*(1 + (r/Rs))**2)  
@@ -133,7 +131,7 @@ def nfw(r,M200,R200,c):  # Msun/pc^3
 halo_ext = 1.2*Rmax  # set extent of NFW profile in terms of distance of furthest tracer
 
 r = np.geomspace(1, halo_ext, 300)  # logarithmically spaced radii in pc
-y = nfw(r,M200,R200,cNFW)  # The profile must be logarithmically sampled!
+y = nfw(r,M200,Rs,cNFW)
 
 # Plot NFW profile
 plt.title('NFW density profile')
@@ -159,12 +157,10 @@ def jeansODE(vr,r,beta):
         B=1
     elif r<rc:
         B=beta[0]
-    #elif r<(Rmax-rc)/2:
-    #    B=beta[1]
     else:
         B=beta[1]
     
-    rho = lambda r: r**2*nfw(r,M200,R200,cNFW)  # integrate to obtain mass profile
+    rho = lambda r: r**2*nfw(r,M200,Rs,cNFW)  # integrate to obtain mass profile
     m_nfw = (4*np.pi*integrate.quad(rho, 0, r)[0])
   
     dvdr = -vr*(2*B/r + derivative(lognu, r, dx=1e-30))-(G/r**2)*(submass(r)+m_nfw)
