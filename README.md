@@ -1,3 +1,5 @@
+This code was written for the project: Discrete Dynamical Jeans Modelling of Simulated Galaxy Clusters (SUMMER 2021)
+
 TNGextract
 ==========
 For use with IllustrisTNG simulation TNG300-1 at z=0.
