@@ -54,7 +54,7 @@ def beta_obs(R200,cNFW):  # observed anisotropy parameters either side of critic
 #======================SET PARAMETERS TO FIT===========================
 
 # Use par table to use pre-determined Illustris parameters
-cNFW = 4#par['c_proxy'][0]  # set NFW concentration parameter
+cNFW = par['c_proxy'][0]  # set NFW concentration parameter
 M200 = par['M200'][0]  # set cluster halo M200 value (Msun)
 R200 = par['R200'][0]  # set cluster halo R200 value (pc)
 # If R200 not pre-determined use R200 = (3*M200/(4*np.pi*200*rho_crit))**(1/3)
