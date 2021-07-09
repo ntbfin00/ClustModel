@@ -12,12 +12,13 @@ filepath='/YOUR_FILEPATH'  # path to where input files are stored
 G = 4.3009125e-3 # (km/s)^2 pc/Msun
 redshift=0
 scale_factor = 1.0 / (1+redshift)
-h = 0.6774 # choose your H0 
+h = 0.6774  
 H0 = h*100 # km/Mpc/s
 cosmo = FlatLambdaCDM(H0=H0, Om0=0.2726)
+rho_crit = (3*(H0/1e6)**2)/(8*np.pi*G)  # Msun/pc^3
 
 # Read in observations from file and add appropriate units
-obs = table.QTable.read(filepath + "obs.dat", format="ascii", names=["x","y","vz","sigz","M","R","zrel","vr"]) 
+obs = table.QTable.read(filepath + "obs.dat", format="ascii", names=["x","y","vz","sigz","M","R","zrel","vr","vphi","vtheta"]) 
 obs["x"].unit = u.arcsec
 obs["y"].unit = u.arcsec
 obs["vz"].unit = u.km/u.s
@@ -25,19 +26,36 @@ obs["sigz"].unit = u.km/u.s
 
 Rdist = obs['R']
 Rmax = np.max(Rdist)
+Rmin = np.min(Rdist[1:])
 zrel = obs['zrel']
 
 # Read in cluster parameters from file and add appropriate units
-par = table.QTable.read(filepath + "clust_params.dat", format="ascii", names=["M200","R200","beta"])  
+par = table.QTable.read(filepath + "clust_params.dat", format="ascii", names=["c_proxy","M200","R200"])  
 
+def beta_obs(Rs,cNFW):  # observed anisotropy parameters either side of critical radius    
+    less_Rs = np.where(Rdist[1:]<Rs)[0]  # split either side
+    more_Rs = np.where(Rdist[1:]>=Rs)[0]
+    split = [less_Rs, more_Rs]
+    b = np.zeros(2)
+    for i in range(0,2):
+        r = split[i]
+        b[i] = 1 - (np.mean(obs['vphi'][1:][r]**2)+np.mean(obs['vtheta'][1:][r]**2))/(2*np.mean(obs['vr'][1:][r]**2))
+    return b
 
 #======================SET PARAMETERS TO FIT===========================
 
 # Use par table to use pre-determined parameters
-c_par=10  # set NFW concentration parameter
-M200=par['M200'][0]  # set cluster halo M200 value (Msun)
-R200=par['R200'][0]  # set cluster halo R200 value (pc)
-beta=par['beta']  # set cluster anisotropy parameters as array
+cNFW = par['c_proxy'][0]  # set NFW concentration parameter
+M200 = par['M200'][0]  # set cluster halo M200 value (Msun)
+R200 = par['R200'][0]  # set cluster halo R200 value (pc)
+# If R200 not pre-determined use R200 = (3*M200/(4*np.pi*200*rho_crit))**(1/3)
+
+Rs=R200/cNFW  # scale radius in pc
+
+beta = beta_obs(Rs,cNFW)  # set cluster anisotropy parameters
+
+print('PARAMETERS:\nc =',cNFW,'| M200 =',M200,'| R200 =',R200,'| beta =',beta,'\n')
+
 
 #======================TRACER DENSITY FIT==============================
 
@@ -103,8 +121,7 @@ plt.show()
 
 #======================DARK MATTER NFW DENSITY PROFILE=======================
 
-def nfw(r,M200,R200,c):  # Msun/pc^3
-    Rs=R200/c  # in pc
+def nfw(r,M200,Rs,c):  # Msun/pc^3
     A_nfw = np.log(1+c) - c/(1+c)
     
     nfw = M200/(4*np.pi*Rs**3*A_nfw*(r/Rs)*(1 + (r/Rs))**2)  
@@ -114,7 +131,7 @@ def nfw(r,M200,R200,c):  # Msun/pc^3
 halo_ext = 1.2*Rmax  # set extent of NFW profile in terms of distance of furthest tracer
 
 r = np.geomspace(1, halo_ext, 300)  # logarithmically spaced radii in pc
-y = nfw(r,M200,R200,c_par)  # The profile must be logarithmically sampled!
+y = nfw(r,M200,Rs,cNFW)
 
 # Plot NFW profile
 plt.title('NFW density profile')
@@ -135,23 +152,27 @@ def submass(r):  # determine stellar mass enclosed at radius r
 
 # Spherical Jeans equation (1st order differential equation)
 def jeansODE(vr,r,beta):
-    bindx = int(np.floor(r/Rmax*len(beta)))  # index to determine which beta value to use
-    if bindx>=len(beta):  # condition to ensure approximate solution doesn't breakdown
-        bindx=len(beta)-1
+    rc=R200/cNFW
+    if r<Rmin:
+        B=1
+    elif r<rc:
+        B=beta[0]
+    else:
+        B=beta[1]
     
-    rho = lambda r: r**2*nfw(r,M200,R200,c_par)  # integrate to obtain mass profile
+    rho = lambda r: r**2*nfw(r,M200,Rs,cNFW)  # integrate to obtain mass profile
     m_nfw = (4*np.pi*integrate.quad(rho, 0, r)[0])
   
-    dvdr = -vr*(2*beta[bindx]/r + derivative(lognu, r, dx=1e-30))-(G/r**2)*(submass(r)+m_nfw)
+    dvdr = -vr*(2*B/r + derivative(lognu, r, dx=1e-30))-(G/r**2)*(submass(r)+m_nfw)
+
     return dvdr
 
-
-vr0 = 0 # initial condition at cluster centre r=0 (arbitrary)
+vr0 = 0  # initial condition at cluster centre r=0 (arbitrary)
 nbins = 1000  # set number of velocity bins for the model
 rbin = np.linspace(1, Rmax, nbins)    # Rmin=1 to avoid division by 0
 
 # Solve ODE for radial velocity
-vr_rms = np.sqrt(abs(odeint(jeansODE, vr0, rbin,args=(beta,))))   # in km/s
+vr_rms = np.sqrt(abs(odeint(jeansODE, vr0**2, rbin,args=(beta,))))   # in km/s
 
 vr_mod=np.zeros(len(Rdist))
 vz_mod=np.zeros(len(Rdist))
@@ -248,3 +269,11 @@ ax[1,2].set_xlabel('x ($10^{-3}$ arcsec)',fontsize=20)
 ax[1,2].text(0.06, 0.88, '$\sigma_z$', style='oblique', transform=ax[1,2].transAxes,fontsize=27)
 res2.set_clim(-col_lim/2, col_lim/2)
 plt.colorbar(res2,ax=ax[1,2])
+
+
+prcnt_vel = abs((abs(mod['vz'])-abs(obs['vz']))/obs['vz'])*100
+prcnt_vel = [x for x in prcnt_vel if np.isnan(x) == False]  # remove nan values
+prcnt_sig = abs((mod['sigz']-obs['sigz'])/obs['sigz'])*100
+prcnt_sig = [x for x in prcnt_sig if np.isnan(x) == False]  # remove nan values
+print('\nVelocity residuals are, on average, ', np.mean(prcnt_vel),'% of the observations')
+print('Dispersion residuals are, on average, ', np.mean(prcnt_sig),'% of the observations')

@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Created on Fri Jun 25 09:01:25 2021
+
 @author: nathanfindlay
 """
 import numpy as np
@@ -30,14 +31,15 @@ snapNum=99  # snapshot number equivalent to z=0
 
 
 #=================EDIT THIS SECTION WITH YOUR DETAILS===================
-headers = {"api-key":"YOUR_API_KEY"}  # insert your API key for IllustrisTNG
+headers = {"api-key":"56fb3d0452d97e788e9fb75ef3bff17b"}#{"api-key":"YOUR_API_KEY"}  # insert your API key for IllustrisTNG
 
-filepath='/YOUR_FILEPATH'  # path where output files should be stored
+filepath='/Users/nathanfindlay/Gals_SummerProject/data_files/'#'/YOUR_FILEPATH'  # path where output files should be stored
 
 zobs=0.1
 Dist = (c*zobs/H0)*1e6  # set observer distance in pc (set here for cluster at z=0.1)
 
 grnr = 1  # set FoF group number to work with (grnr=0 is not a relaxed cluster)
+
 #=======================================================================
 
 
@@ -102,17 +104,21 @@ xproj = np.arctan((xrel)/(Dist+(zrel)))
 yproj = np.arctan((yrel)/(Dist+(zrel)))
 print('Projected positions determined')
 
-# Determine radial distance from centre to tracer.
+# Determine radial distance from centre to tracer
 Rdist = np.sqrt((xrel)**2+(yrel)**2+(zrel)**2)  # in pc
 Rmax = np.max(Rdist)  # distance of furthest tracer
-
 
 # Extract FoF halo properties
 url = baseUrl + sim + 'snapshots/99/halos/'+str(grnr)+'/info.json'
 fof_halos = get(url)
 
-M200=fof_halos['Group_M_Mean200']*to_Msun  # in Msun
-R200=fof_halos['Group_R_Mean200']*to_pc  # in pc
+vmax = pri_sub['vmax']  # maximum value of the spherically-averaged rotation curve
+vmaxrad= pri_sub['vmaxrad']*to_pc  # radius of this maximum value
+c_proxy = (vmax/(H0*vmaxrad*1e-6))**0.61  # proxy for concentration parameter
+print('c_proxy extracted')
+
+M200=fof_halos['Group_M_Crit200']*to_Msun  # in Msun
+R200=fof_halos['Group_R_Crit200']*to_pc  # in pc
 print('M200 and R200 extracted')
 
 # Extract velocities
@@ -128,7 +134,7 @@ for i in range(0,num):
     my_subs = get(subhalos['results'][i]['url'])
     vx_obs[i] = my_subs['vel_x']-vcx  
     vy_obs[i] = my_subs['vel_y']-vcy
-    vz_obs[i] = my_subs['vel_z']-vcz  # velocity along line of sight (LoS)
+    vz_obs[i] = my_subs['vel_z']-vcz  # velocity along line of sight (LoS) in km/s
 print('Velocities calculated')
 
 # Bin velocities and calculate dispersions for each annulus.
@@ -154,9 +160,10 @@ print('Subhalo stellar masses extracted')
 
 # Convert velocities from cartesian to spherical
 def v_sph(r,x,y,z,vx,vy,vz):  
-    vrad = (x*vx+y*vy+z*vz)/r
-    vphi = (x*vy-y*vx)/np.sqrt(r**2-z**2)
-    vtheta = (z/(r*np.sqrt(r**2-z**2)))*(x*vx + y*vy + ((z/r)**2-1)*vz)
+    rminz = np.sqrt(r**2-z**2)
+    vrad = (x*vx + y*vy + z*vz)/r
+    vphi = (x*vy - y*vx)/rminz
+    vtheta = (z/(r*rminz))*(x*vx + y*vy - vz*(rminz**2)/z)
 
     vrad[r==0]=0  # set velocities to zero for primary subhalo
     vphi[r==0]=0
@@ -166,14 +173,14 @@ def v_sph(r,x,y,z,vx,vy,vz):
 vrad,vphi,vtheta = v_sph(Rdist,xrel,yrel,zrel,vx_obs,vy_obs,vz_obs)
 
 # Write positions, LoS velocities, LoS dispersions and masses to file
-units = 'x\' (arcsecs)   y\' (arcsecs)   vz (km/s)   sigma_z (km/s)   Mstellar (Msun)   Rdist (pc)   z_rel (pc)   vr (km/s)'
-data = np.column_stack((xproj,yproj,vz_obs,sigma_obs,msub,Rdist,zrel,vrad))
+units = 'x\' (arcsecs)   y\' (arcsecs)   vz (km/s)   sigma_z (km/s)   Mstellar (Msun)   Rdist (pc)   z_rel (pc)   vr (km/s)   vphi (km/s)   vtheta (km/s)'
+data = np.column_stack((xproj,yproj,vz_obs,sigma_obs,msub,Rdist,zrel,vrad,vphi,vtheta))
 
 np.savetxt(filepath + 'obs.dat', data, header=units)
 print('Observations saved to file')
 
 # Read in observations from file and add appropriate units
-obs = table.QTable.read(filepath + "obs.dat", format="ascii", names=["x","y","vz","sigz","M","R","zrel","vr"])  
+obs = table.QTable.read(filepath + "obs.dat", format="ascii", names=["x","y","vz","sigz","M","R","zrel","vr","vphi","vtheta"])  
 obs["x"].unit = u.arcsec
 obs["y"].unit = u.arcsec
 obs["vz"].unit = u.km/u.s
@@ -199,23 +206,9 @@ ax[1].set_ylabel('y ($10^{-3}$ arcsec)',fontsize=20)
 obs2.set_clim(0, col_lim*(3/4))
 plt.colorbar(obs2,ax=ax[1])
 
-
-# Determine real anisotropy parameters for observations
-nbeta=10  # set number of beta parameters to use
-beta_obs=np.zeros(nbeta)
-for i in range(0,nbeta):
-    indx = np.where(Rdist[1:]<=Rmax/nbeta*(i+1))
-    beta_obs [i] = 1 - (np.mean(vphi[1:][indx]**2)+np.mean(vtheta[1:][indx]**2))/(2*np.mean(vrad[1:][indx]**2))
-print('\nAnisotropy parameters calculated')
-
-# Write cluster parameters to file
-units = 'M200 (Msun)   R200 (pc)   Beta'
-
-M200arr = np.zeros(len(beta_obs))  # M200 and R200 are in first row in table
-M200arr[0] = M200   
-R200arr = np.zeros(len(beta_obs))
-R200arr[0] = R200  
-
-data = np.column_stack((M200arr,R200arr,beta_obs)) 
+# Write M200 and R200 to file
+units = 'c_proxy   M200 (Msun)   R200 (pc)'
+data = np.column_stack((c_proxy, M200,R200)) 
 np.savetxt(filepath + 'clust_params.dat', data, header=units)
 print('Cluster parameters saved to file')
+
