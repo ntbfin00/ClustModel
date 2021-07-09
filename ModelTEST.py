@@ -54,8 +54,8 @@ def beta_obs(R200,cNFW):  # observed anisotropy parameters either side of critic
 
 #======================SET PARAMETERS TO FIT===========================
 
-# Use par table to use pre-determined parameters
-cNFW = 4.3  # set NFW concentration parameter
+# Use par table to use pre-determined Illustris parameters
+cNFW = 18  # set NFW concentration parameter
 M200 = par['M200'][0]  # set cluster halo M200 value (Msun)
 R200 = par['R200'][0]  # set cluster halo R200 value (pc)
 # If R200 not pre-determined use R200 = (3*M200/(4*np.pi*200*rho_crit))**(1/3)
@@ -64,9 +64,86 @@ R200 = par['R200'][0]  # set cluster halo R200 value (pc)
 
 beta = beta_obs(R200,cNFW)  # set cluster anisotropy parameters
 
-print('STARTING PARAMETERS:\nc =',cNFW,'| M200 =',M200,'| R200 =',R200,'| beta =',beta,'\n')
+print('ILLUSTRIS PARAMETERS:\nc =',cNFW,'| M200 =',M200,'| R200 =',R200,'| beta =',beta,'\n')
 
 #=========================VARY PARAMETERS===============================
+novar_par = cNFW,M200,beta,R200  # unvaried parameters
+
+#======================TRACER DENSITY FIT==============================
+
+#Determine tracer number density distribution (logarithmically binned)
+bins=20  # number of bins
+tracer_hist = np.histogram(np.log(Rdist[1:]),bins)  # histogram data
+
+# histogram of tracer number density
+shell_vol = np.zeros(bins)
+density = np.zeros(bins)
+logr = np.zeros(bins)
+
+for i in range(0,bins):
+    shell_vol[i] = (4/3)*np.pi*(np.exp(tracer_hist[1][i+1])**3-np.exp(tracer_hist[1][i])**3)  # pc^3
+    density[i] = tracer_hist[0][i]/shell_vol[i]   # pc^(-3)
+    logr[i] = (tracer_hist[1][i+1]-tracer_hist[1][i])/2+tracer_hist[1][i]
+    
+
+# Fit polynomial
+no_val = np.where(density == 0)[0]  # disregard zero values that will mess with the polynomial fit
+r_fit = np.delete(logr, no_val)
+dens_fit = np.delete(density, no_val)
+
+deg = 5  # chosen polynomial degree
+a = np.polyfit(r_fit,np.log(dens_fit),deg)
+
+def poly(x,a,deg):
+    p=0
+    for i in range(0,deg+1):
+        n = deg - i
+        p = p + a[i]*x**n
+        return p
+        
+
+#======================DARK MATTER NFW DENSITY PROFILE=======================
+
+def nfw(r,M200,R200,c):  # Msun/pc^3
+    Rs=R200/c  # in pc
+    A_nfw = np.log(1+c) - c/(1+c)
+    
+    nfw = M200/(4*np.pi*Rs**3*A_nfw*(r/Rs)*(1 + (r/Rs))**2)  
+
+    return nfw
+
+halo_ext = 1.2*Rmax  # set extent of NFW profile in terms of distance of furthest tracer
+
+
+#===========================JEANS MODEL===================================
+
+def lognu(r):  # natural logarithm of tracer density in pc^-3
+    return poly(np.log(r),a,deg)
+
+def submass(r):  # determine stellar mass enclosed at radius r
+    objs = np.where(Rdist<r)
+    return np.sum(obs['M'][objs])
+
+# Spherical Jeans equation (1st order differential equation)
+def jeansODE(vr,r,beta,M200,R200,cNFW):
+    rc=R200/cNFW
+    if r<Rmin:
+        B=1
+    elif r<rc:
+        B=beta[0]
+    else:
+        B=beta[1]
+    
+    rho = lambda r: r**2*nfw(r,M200,R200,cNFW)  # integrate to obtain mass profile
+    m_nfw = (4*np.pi*integrate.quad(rho, 0, r)[0])
+  
+    dvdr = -vr*(2*B/r + derivative(lognu, r, dx=1e-30))-(G/r**2)*(submass(r)+m_nfw)
+
+    return dvdr
+
+vr0 = 0  # initial condition at cluster centre r=0 (arbitrary)
+nbins = 1000  # set number of velocity bins for the model
+rbin = np.linspace(1, Rmax, nbins)    # Rmin=1 to avoid division by 0
 '''
 def vary_param(factor):  # vary parameters by a chosen factor
     c_var = factor*cNFW  
@@ -74,6 +151,7 @@ def vary_param(factor):  # vary parameters by a chosen factor
     R200_var = ((factor)**(1/3))*R200
     beta_var = factor*beta_obs(R200,cNFW)  # set cluster anisotropy parameters
     return c_var, M200_var, beta_var, R200_var
+'''
 '''
 def vary_param(percent):  # vary parameters by a chosen factor
     factor = 1+(percent/100)
@@ -189,7 +267,8 @@ for n in range(0,7):
     vr0 = 0  # initial condition at cluster centre r=0 (arbitrary)
     nbins = 1000  # set number of velocity bins for the model
     rbin = np.linspace(1, Rmax, nbins)    # Rmin=1 to avoid division by 0
-
+'''
+'''
     # Solve ODE for radial velocity
     vr_rms = np.sqrt(abs(odeint(jeansODE, vr0**2, rbin,args=(beta,M200,R200,cNFW))))   # in km/s
 
@@ -227,6 +306,8 @@ for n in range(0,7):
 #==========================CREATE PLOTS===========================
 
 col_lim = 1500  # limit of colorbar
+
+
 rows = ['c','$M_{200}$',r'$\beta$']
 
 f1, axes= plt.subplots(4,2,sharex='all', sharey='all',figsize=(11,14))
@@ -397,7 +478,7 @@ plt.colorbar(observed,cax=cax1)
 plt.colorbar(best,cax=cax2)
 
 plt.show()
-
+'''
 
 #==================RESIDUAL AVERAGE WITH VARYING PARAMETER=================
 
@@ -430,6 +511,7 @@ for j in range(0,4):  # vary c, M200 and both beta parameters seperately
         sigma_mod=np.zeros(len(Rdist))
         gamma=np.zeros(len(Rdist))
 
+        rbin_indx = np.digitize(Rdist, rbin, right=True)
         for i in range(1,len(Rdist)):
             vz_mod[0] = 0  # add primary subhalo vz
             vr_mod[i] = vr_rms[rbin_indx[i]]  # sets abs(vr) for each object based on Jeans solution
@@ -441,6 +523,9 @@ for j in range(0,4):  # vary c, M200 and both beta parameters seperately
     
 
         # Calculate dispersions by binning velocities in radius
+        nsig_bin = 20  # number of velocity bins for dispersion calculations (same should be used in TNGextract)
+        sig_bin = np.linspace(0, Rmax, nsig_bin)  # make evenly distributed bins
+        sigbin_indx = np.digitize(Rdist, sig_bin, right=True)
         for i in range(0,len(rbin)):
             bin_objs = np.where(sigbin_indx == i)[0]  # determine what tracers lie in each annulus
             v_ms = np.mean(vz_mod[bin_objs]**2)  # mean of the square velocities
@@ -459,31 +544,46 @@ B1_err = mean_err[2]
 B2_err = mean_err[3]
 
 # Plot average residual with parameter value
-f3, ((ax1,ax2,ax3,ax4))= plt.subplots(4,1,figsize=((5,12)))
-f3.tight_layout(pad=2.5)
+col_lim = 1500  # limit of colorbar
+rows = ['c','$M_{200}$',r'$\beta_{<R_s}$',r'$\beta_{>R_s}$']
+pad = 50 # in points
+
+f3, ((ax1,ax2,ax3,ax4))= plt.subplots(4,1,figsize=((7,12)))
+
+axes = ((ax1,ax2,ax3,ax4))
+for ax, row in zip(axes[0:], rows):
+    ax.annotate(row, xy=(0, 0.5), xytext=(-ax.yaxis.labelpad - pad, 0),
+                xycoords=ax.yaxis.label, textcoords='offset points',
+                size=27, ha='center', va='center',style='italic')
+    
+f3.tight_layout(pad=2.7)
 f3.show()
 
 ax1.plot(c_var,c_err)
 ax1.axvline(x=novar_par[0],linestyle='--',color='g',label='Visual fit')
-ax1.set_xlabel('c parameter',fontsize=15)
+#ax1.set_xlabel('c parameter',fontsize=15)
 ax1.set_ylabel('$(\sigma_{mod}-\sigma_{obs})/\sigma_{obs}\,\, (\%)$',fontsize=15)
 ax1.legend()
 
 ax2.plot(M_var,M_err)
 ax2.axvline(x=novar_par[1],linestyle='--',color='r',label='Illustris value')
-ax2.set_xlabel('$M_{200}$ parameter',fontsize=15)
+#ax2.set_xlabel('$M_{200}$ parameter',fontsize=15)
 ax2.set_ylabel('$(\sigma_{mod}-\sigma_{obs})/\sigma_{obs}\,\, (\%)$',fontsize=15)
 ax2.set_xscale('log')
 ax2.legend()
 
 ax3.plot(B_var,B1_err)
 ax3.axvline(x=novar_par[2][0],linestyle='--',color='r',label='Illustris value')
-ax3.set_xlabel(r'$\beta$'+' interior to $R_s$',fontsize=15)
+#ax3.set_xlabel(r'$\beta$'+' interior to $R_s$',fontsize=15)
 ax3.set_ylabel('$(\sigma_{mod}-\sigma_{obs})/\sigma_{obs}\,\, (\%)$',fontsize=15)
+ax3.set_yscale('log')
 ax3.legend()
 
 ax4.plot(B_var,B2_err)
 ax4.axvline(x=novar_par[2][1],linestyle='--',color='r',label='Illustris value')
-ax4.set_xlabel(r'$\beta$'+' exterior to $R_s$',fontsize=15)
+#ax4.set_xlabel(r'$\beta$'+' exterior to $R_s$',fontsize=15)
 ax4.set_ylabel('$(\sigma_{mod}-\sigma_{obs})/\sigma_{obs}\,\, (\%)$',fontsize=15)
+ax4.set_yscale('log')
 ax4.legend()
+
+f3.suptitle("Group "+str(grnr),y=1,x=0.6,fontsize=20)
