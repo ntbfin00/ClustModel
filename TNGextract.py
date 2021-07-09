@@ -108,13 +108,17 @@ print('Projected positions determined')
 Rdist = np.sqrt((xrel)**2+(yrel)**2+(zrel)**2)  # in pc
 Rmax = np.max(Rdist)  # distance of furthest tracer
 
-
 # Extract FoF halo properties
 url = baseUrl + sim + 'snapshots/99/halos/'+str(grnr)+'/info.json'
 fof_halos = get(url)
 
-M200=fof_halos['Group_M_Mean200']*to_Msun  # in Msun
-R200=fof_halos['Group_R_Mean200']*to_pc  # in pc
+vmax = pri_sub['vmax']  # maximum value of the spherically-averaged rotation curve
+vmaxrad= pri_sub['vmaxrad']*to_pc  # radius of this maximum value
+c_proxy = (vmax/(H0*vmaxrad*1e-6))**0.61  # proxy for concentration parameter
+print('c_proxy extracted')
+
+M200=fof_halos['Group_M_Crit200']*to_Msun  # in Msun
+R200=fof_halos['Group_R_Crit200']*to_pc  # in pc
 print('M200 and R200 extracted')
 
 # Extract velocities
@@ -203,12 +207,8 @@ obs2.set_clim(0, col_lim*(3/4))
 plt.colorbar(obs2,ax=ax[1])
 
 # Write M200 and R200 to file
-units = 'M200 (Msun)   R200 (pc)'
-data = np.column_stack((M200,R200)) 
+units = 'c_proxy   M200 (Msun)   R200 (pc)'
+data = np.column_stack((c_proxy, M200,R200)) 
 np.savetxt(filepath + 'clust_params.dat', data, header=units)
 print('Cluster parameters saved to file')
-
-
-
-
 
