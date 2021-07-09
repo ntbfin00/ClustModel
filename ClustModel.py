@@ -6,13 +6,13 @@ from scipy.integrate import odeint
 from scipy import integrate
 from scipy.misc import derivative
 
-filepath='/Users/nathanfindlay/Gals_SummerProject/data_files/'#'/YOUR_FILEPATH'  # path to where input files are stored
+filepath='/YOUR_FILEPATH'  # path to where input files are stored
 
 # Define astronomical constants
 G = 4.3009125e-3 # (km/s)^2 pc/Msun
 redshift=0
 scale_factor = 1.0 / (1+redshift)
-h = 0.6774 # choose your H0 
+h = 0.6774  
 H0 = h*100 # km/Mpc/s
 cosmo = FlatLambdaCDM(H0=H0, Om0=0.2726)
 rho_crit = (3*(H0/1e6)**2)/(8*np.pi*G)  # Msun/pc^3
@@ -30,7 +30,7 @@ Rmin = np.min(Rdist[1:])
 zrel = obs['zrel']
 
 # Read in cluster parameters from file and add appropriate units
-par = table.QTable.read(filepath + "clust_params.dat", format="ascii", names=["M200","R200"])  
+par = table.QTable.read(filepath + "clust_params.dat", format="ascii", names=["c_proxy","M200","R200"])  
 
 def beta_obs(Rs,cNFW):  # observed anisotropy parameters either side of critical radius    
     less_Rs = np.where(Rdist[1:]<Rs)[0]  # split either side
@@ -45,7 +45,7 @@ def beta_obs(Rs,cNFW):  # observed anisotropy parameters either side of critical
 #======================SET PARAMETERS TO FIT===========================
 
 # Use par table to use pre-determined parameters
-cNFW = 7  # set NFW concentration parameter
+cNFW = par['c_proxy'][0]  # set NFW concentration parameter
 M200 = par['M200'][0]  # set cluster halo M200 value (Msun)
 R200 = par['R200'][0]  # set cluster halo R200 value (pc)
 # If R200 not pre-determined use R200 = (3*M200/(4*np.pi*200*rho_crit))**(1/3)
